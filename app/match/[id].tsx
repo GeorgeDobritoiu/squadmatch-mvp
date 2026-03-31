@@ -1,0 +1,529 @@
+import React, { useState } from 'react';
+import {
+  View,
+  Text,
+  ScrollView,
+  StyleSheet,
+  TouchableOpacity,
+  ActivityIndicator,
+  Alert,
+  TextInput,
+  Modal,
+} from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { Ionicons } from '@expo/vector-icons';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useLocalSearchParams, useRouter } from 'expo-router';
+import { colors, spacing, borderRadius, typography, shadows } from '@/constants/design';
+import {
+  getMatchById,
+  getAttendance,
+  getGuests,
+  getPlayers,
+  getCurrentUser,
+  generateTeams,
+  lockTeams,
+  submitScore,
+  upsertAttendance,
+} from '@/lib/data';
+import AddGuestModal from '@/components/AddGuestModal';
+
+export default function MatchDetailScreen() {
+  const { id } = useLocalSearchParams<{ id: string }>();
+  const router = useRouter();
+  const queryClient = useQueryClient();
+  const [scoreA, setScoreA] = useState('');
+  const [scoreB, setScoreB] = useState('');
+  const [scoreModalVisible, setScoreModalVisible] = useState(false);
+  const [guestModalVisible, setGuestModalVisible] = useState(false);
+
+  const { data: match, isLoading: matchLoading } = useQuery({
+    queryKey: ['match', id],
+    queryFn: () => getMatchById(id),
+    enabled: !!id,
+  });
+
+  const { data: attendance } = useQuery({
+    queryKey: ['attendance', id],
+    queryFn: () => getAttendance(id),
+    enabled: !!id,
+  });
+
+  const { data: guests } = useQuery({
+    queryKey: ['guests', id],
+    queryFn: () => getGuests(id),
+    enabled: !!id,
+  });
+
+  const { data: players } = useQuery({
+    queryKey: ['players'],
+    queryFn: getPlayers,
+  });
+
+  const { data: currentUser } = useQuery({
+    queryKey: ['currentUser'],
+    queryFn: getCurrentUser,
+  });
+
+  const generateMutation = useMutation({
+    mutationFn: () => generateTeams(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['attendance', id] });
+      queryClient.invalidateQueries({ queryKey: ['guests', id] });
+    },
+  });
+
+  const lockMutation = useMutation({
+    mutationFn: () => lockTeams(id),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['match', id] }),
+  });
+
+  const scoreMutation = useMutation({
+    mutationFn: () => submitScore(id, parseInt(scoreA), parseInt(scoreB)),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['match', id] });
+      queryClient.invalidateQueries({ queryKey: ['matches'] });
+      setScoreModalVisible(false);
+      Alert.alert('Score submitted!');
+    },
+  });
+
+  const attendanceMutation = useMutation({
+    mutationFn: (status: string) => upsertAttendance(id, currentUser!.id, status),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['attendance', id] }),
+  });
+
+  const getPlayer = (playerId: string) => players?.find((p) => p.id === playerId);
+  const isAdmin = currentUser?.role === 'admin';
+
+  const yesAttendance = (attendance ?? []).filter((a) => a.status === 'yes');
+  const maybeAttendance = (attendance ?? []).filter((a) => a.status === 'maybe');
+  const myAttendance = (attendance ?? []).find((a) => a.playerId === currentUser?.id);
+
+  const formatDate = (date: string) => {
+    const d = new Date(date + 'T12:00:00');
+    return d.toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
+  };
+
+  if (matchLoading) {
+    return (
+      <SafeAreaView style={styles.container}>
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color={colors.accent} />
+        </View>
+      </SafeAreaView>
+    );
+  }
+
+  if (!match) {
+    return (
+      <SafeAreaView style={styles.container}>
+        <View style={styles.loadingContainer}>
+          <Text style={styles.errorText}>Match not found</Text>
+        </View>
+      </SafeAreaView>
+    );
+  }
+
+  return (
+    <SafeAreaView style={styles.container} edges={['top']}>
+      {/* Nav */}
+      <View style={styles.nav}>
+        <TouchableOpacity style={styles.backBtn} onPress={() => router.back()}>
+          <Ionicons name="arrow-back" size={22} color={colors.primary} />
+        </TouchableOpacity>
+        <Text style={styles.navTitle}>Match Details</Text>
+        <View style={{ width: 40 }} />
+      </View>
+
+      <ScrollView style={styles.scroll} contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
+        {/* Match Hero */}
+        <View style={styles.heroCard}>
+          <View style={styles.heroTop}>
+            <View style={styles.heroInfo}>
+              <Text style={styles.heroDate}>{formatDate(match.date)}</Text>
+              <View style={styles.heroMeta}>
+                <Ionicons name="time-outline" size={14} color="rgba(255,255,255,0.7)" />
+                <Text style={styles.heroMetaText}>{match.time}</Text>
+                <Text style={styles.heroMetaDot}>·</Text>
+                <Ionicons name="location-outline" size={14} color="rgba(255,255,255,0.7)" />
+                <Text style={styles.heroMetaText} numberOfLines={1}>{match.location}</Text>
+              </View>
+            </View>
+            {match.status === 'closed' && match.scoreA !== null && match.scoreB !== null ? (
+              <View style={styles.scoreBadge}>
+                <Text style={styles.scoreA}>{match.scoreA}</Text>
+                <Text style={styles.scoreDash}>–</Text>
+                <Text style={styles.scoreB}>{match.scoreB}</Text>
+              </View>
+            ) : (
+              <Text style={styles.heroCost}>£{match.costPerPlayer?.toFixed(2)}</Text>
+            )}
+          </View>
+
+          {/* Stats */}
+          <View style={styles.heroStats}>
+            <View style={styles.heroStatItem}>
+              <Text style={styles.heroStatValue}>{yesAttendance.length}</Text>
+              <Text style={styles.heroStatLabel}>Going</Text>
+            </View>
+            <View style={styles.heroStatDivider} />
+            <View style={styles.heroStatItem}>
+              <Text style={styles.heroStatValue}>{maybeAttendance.length}</Text>
+              <Text style={styles.heroStatLabel}>Maybe</Text>
+            </View>
+            <View style={styles.heroStatDivider} />
+            <View style={styles.heroStatItem}>
+              <Text style={styles.heroStatValue}>{guests?.length ?? 0}</Text>
+              <Text style={styles.heroStatLabel}>Guests</Text>
+            </View>
+          </View>
+        </View>
+
+        {/* Attendance buttons */}
+        {match.status !== 'closed' && (
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>Your RSVP</Text>
+            <View style={styles.rsvpRow}>
+              {(['yes', 'no', 'maybe'] as const).map((s) => {
+                const isActive = myAttendance?.status === s;
+                const cfg = {
+                  yes: { icon: 'checkmark-circle', activeColor: colors.accentDark, label: 'Yes' },
+                  no: { icon: 'close-circle', activeColor: '#EF4444', label: 'No' },
+                  maybe: { icon: 'help-circle', activeColor: '#D97706', label: 'Maybe' },
+                }[s];
+                return (
+                  <TouchableOpacity
+                    key={s}
+                    style={[styles.rsvpBtn, isActive && { backgroundColor: cfg.activeColor, borderColor: cfg.activeColor }]}
+                    onPress={() => attendanceMutation.mutate(s)}
+                  >
+                    <Ionicons name={cfg.icon as any} size={18} color={isActive ? colors.white : colors.textSecondary} />
+                    <Text style={[styles.rsvpBtnText, isActive && styles.rsvpBtnTextActive]}>{cfg.label}</Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+          </View>
+        )}
+
+        {/* Player List */}
+        <View style={styles.section}>
+          <View style={styles.sectionRow}>
+            <Text style={styles.sectionTitle}>Players Going ({yesAttendance.length})</Text>
+          </View>
+          {yesAttendance.map((att) => {
+            const player = getPlayer(att.playerId);
+            return (
+              <TouchableOpacity
+                key={att.id}
+                style={styles.playerRow}
+                onPress={() => router.push(`/player/${att.playerId}`)}
+                activeOpacity={0.8}
+              >
+                <View style={styles.playerAvatar}>
+                  <Text style={styles.playerAvatarText}>{(player?.name ?? '?').charAt(0)}</Text>
+                </View>
+                <View style={styles.playerInfo}>
+                  <Text style={styles.playerName}>{player?.name ?? att.playerId}</Text>
+                  <Text style={styles.playerPos}>{player?.position}</Text>
+                </View>
+                {att.team && (
+                  <View style={[styles.teamBadge, { backgroundColor: att.team === 'A' ? colors.primaryTint : '#FEE2E2' }]}>
+                    <Text style={[styles.teamBadgeText, { color: att.team === 'A' ? colors.primary : '#DC2626' }]}>Team {att.team}</Text>
+                  </View>
+                )}
+                <Ionicons name="chevron-forward" size={14} color={colors.textTertiary} style={{ marginLeft: 4 }} />
+              </TouchableOpacity>
+            );
+          })}
+
+          {maybeAttendance.length > 0 && (
+            <>
+              <Text style={[styles.sectionTitle, { marginTop: spacing.md }]}>Maybe ({maybeAttendance.length})</Text>
+              {maybeAttendance.map((att) => {
+                const player = getPlayer(att.playerId);
+                return (
+                  <TouchableOpacity
+                    key={att.id}
+                    style={[styles.playerRow, styles.playerRowMaybe]}
+                    onPress={() => router.push(`/player/${att.playerId}`)}
+                    activeOpacity={0.8}
+                  >
+                    <View style={[styles.playerAvatar, styles.playerAvatarMaybe]}>
+                      <Text style={[styles.playerAvatarText, { color: colors.textSecondary }]}>{(player?.name ?? '?').charAt(0)}</Text>
+                    </View>
+                    <View style={styles.playerInfo}>
+                      <Text style={[styles.playerName, { color: colors.textSecondary }]}>{player?.name ?? att.playerId}</Text>
+                    </View>
+                    <Ionicons name="chevron-forward" size={14} color={colors.textTertiary} />
+                  </TouchableOpacity>
+                );
+              })}
+            </>
+          )}
+        </View>
+
+        {/* Guests */}
+        {(guests?.length ?? 0) > 0 && (
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>Guests ({guests?.length})</Text>
+            {(guests ?? []).map((g) => {
+              const sponsor = getPlayer(g.sponsorId);
+              return (
+                <View key={g.id} style={styles.guestRow}>
+                  <View style={[styles.playerAvatar, { backgroundColor: '#EDE9FE' }]}>
+                    <Text style={[styles.playerAvatarText, { color: '#7C3AED' }]}>{g.name.charAt(0)}</Text>
+                  </View>
+                  <View style={styles.playerInfo}>
+                    <Text style={styles.playerName}>{g.name}</Text>
+                    <Text style={styles.guestMeta}>via {sponsor?.name ?? g.sponsorId} · {g.type.replace('_', ' ')}</Text>
+                  </View>
+                  {g.team && (
+                    <View style={[styles.teamBadge, { backgroundColor: g.team === 'A' ? colors.primaryTint : '#FEE2E2' }]}>
+                      <Text style={[styles.teamBadgeText, { color: g.team === 'A' ? colors.primary : '#DC2626' }]}>Team {g.team}</Text>
+                    </View>
+                  )}
+                </View>
+              );
+            })}
+          </View>
+        )}
+
+        {/* Admin Controls */}
+        {isAdmin && match.status !== 'closed' && (
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>Admin Controls</Text>
+            <View style={styles.adminGrid}>
+              <TouchableOpacity
+                style={styles.adminCard}
+                onPress={() => {
+                  generateMutation.mutate();
+                }}
+              >
+                <Ionicons name="shuffle" size={22} color={colors.primary} />
+                <Text style={styles.adminCardTitle}>Generate Teams</Text>
+                <Text style={styles.adminCardDesc}>Auto-balance players</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[styles.adminCard, match.teamsLocked && styles.adminCardLocked]}
+                onPress={() => {
+                  if (!match.teamsLocked) {
+                    Alert.alert('Lock Teams?', 'This will finalise the teams.', [
+                      { text: 'Cancel', style: 'cancel' },
+                      { text: 'Lock', onPress: () => lockMutation.mutate() },
+                    ]);
+                  }
+                }}
+              >
+                <Ionicons name={match.teamsLocked ? 'lock-closed' : 'lock-open-outline'} size={22} color={match.teamsLocked ? colors.accent : colors.primary} />
+                <Text style={styles.adminCardTitle}>{match.teamsLocked ? 'Teams Locked' : 'Lock Teams'}</Text>
+                <Text style={styles.adminCardDesc}>{match.teamsLocked ? 'Finalised' : 'Confirm teams'}</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={styles.adminCard}
+                onPress={() => router.push(`/teams/${match.id}`)}
+              >
+                <Ionicons name="eye-outline" size={22} color={colors.primary} />
+                <Text style={styles.adminCardTitle}>View Teams</Text>
+                <Text style={styles.adminCardDesc}>See full lineup</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={styles.adminCard}
+                onPress={() => setGuestModalVisible(true)}
+              >
+                <Ionicons name="person-add-outline" size={22} color={colors.primary} />
+                <Text style={styles.adminCardTitle}>Add Guest</Text>
+                <Text style={styles.adminCardDesc}>Add a player</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        )}
+
+        {/* Post-Match */}
+        {isAdmin && match.status === 'closed' && (
+          <View style={styles.section}>
+            <View style={styles.postMatchRow}>
+              <TouchableOpacity
+                style={styles.postMatchBtn}
+                onPress={() => router.push(`/motm/${match.id}`)}
+              >
+                <Ionicons name="trophy-outline" size={18} color="#D97706" />
+                <Text style={styles.postMatchBtnText}>MOTM Voting</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.postMatchBtn, styles.postMatchBtnPrimary]}
+                onPress={() => setScoreModalVisible(true)}
+              >
+                <Ionicons name="create-outline" size={18} color={colors.white} />
+                <Text style={[styles.postMatchBtnText, { color: colors.white }]}>Edit Score</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        )}
+
+        {isAdmin && match.status !== 'closed' && (
+          <View style={styles.section}>
+            <TouchableOpacity
+              style={styles.submitScoreBtn}
+              onPress={() => setScoreModalVisible(true)}
+            >
+              <Ionicons name="checkmark-done-outline" size={18} color={colors.white} />
+              <Text style={styles.submitScoreBtnText}>Submit Final Score</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.motmBtn}
+              onPress={() => router.push(`/motm/${match.id}`)}
+            >
+              <Ionicons name="trophy-outline" size={18} color="#D97706" />
+              <Text style={styles.motmBtnText}>MOTM Voting</Text>
+            </TouchableOpacity>
+          </View>
+        )}
+
+        <View style={{ height: spacing.xl }} />
+      </ScrollView>
+
+      {/* Score Modal */}
+      <Modal visible={scoreModalVisible} animationType="slide" transparent>
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalSheet}>
+            <View style={styles.modalHandle} />
+            <Text style={styles.modalTitle}>Submit Score</Text>
+            <View style={styles.scoreInputRow}>
+              <View style={styles.scoreInputBlock}>
+                <Text style={styles.scoreInputLabel}>Team A</Text>
+                <TextInput
+                  style={styles.scoreInput}
+                  value={scoreA}
+                  onChangeText={setScoreA}
+                  keyboardType="number-pad"
+                  placeholder="0"
+                  maxLength={2}
+                />
+              </View>
+              <Text style={styles.scoreInputVs}>–</Text>
+              <View style={styles.scoreInputBlock}>
+                <Text style={styles.scoreInputLabel}>Team B</Text>
+                <TextInput
+                  style={styles.scoreInput}
+                  value={scoreB}
+                  onChangeText={setScoreB}
+                  keyboardType="number-pad"
+                  placeholder="0"
+                  maxLength={2}
+                />
+              </View>
+            </View>
+            <View style={styles.modalActions}>
+              <TouchableOpacity style={styles.cancelBtn} onPress={() => setScoreModalVisible(false)}>
+                <Text style={styles.cancelBtnText}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.confirmBtn} onPress={() => scoreMutation.mutate()}>
+                <Text style={styles.confirmBtnText}>Submit</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      <AddGuestModal
+        visible={guestModalVisible}
+        onClose={() => setGuestModalVisible(false)}
+        matchId={id}
+        sponsorId={currentUser?.id ?? 'p1'}
+        onAdded={() => {
+          setGuestModalVisible(false);
+          queryClient.invalidateQueries({ queryKey: ['guests', id] });
+        }}
+      />
+    </SafeAreaView>
+  );
+}
+
+const styles = StyleSheet.create({
+  container: { flex: 1, backgroundColor: colors.backgroundSecondary },
+  scroll: { flex: 1 },
+  scrollContent: { padding: spacing.md },
+  loadingContainer: { flex: 1, justifyContent: 'center', alignItems: 'center' },
+  errorText: { ...typography.body, color: colors.textSecondary },
+
+  nav: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: spacing.md, paddingVertical: spacing.sm },
+  backBtn: { width: 40, height: 40, borderRadius: 20, backgroundColor: colors.white, justifyContent: 'center', alignItems: 'center', ...shadows.sm },
+  navTitle: { ...typography.captionBold, color: colors.primary, textTransform: 'uppercase', letterSpacing: 0.5 },
+
+  heroCard: { backgroundColor: colors.primary, borderRadius: borderRadius.xl, padding: spacing.lg, marginBottom: spacing.md, ...shadows.lg },
+  heroTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: spacing.md },
+  heroInfo: { flex: 1, paddingRight: spacing.md },
+  heroDate: { ...typography.h4, color: colors.white, marginBottom: spacing.xs },
+  heroMeta: { flexDirection: 'row', alignItems: 'center', gap: 5, flexWrap: 'wrap' },
+  heroMetaText: { ...typography.small, color: 'rgba(255,255,255,0.75)' },
+  heroMetaDot: { color: 'rgba(255,255,255,0.5)' },
+  heroCost: { ...typography.h3, color: colors.accentLight },
+  scoreBadge: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  scoreA: { ...typography.h2, color: colors.accentLight },
+  scoreDash: { ...typography.h3, color: 'rgba(255,255,255,0.5)' },
+  scoreB: { ...typography.h2, color: '#FCA5A5' },
+  heroStats: { flexDirection: 'row', backgroundColor: 'rgba(255,255,255,0.1)', borderRadius: borderRadius.lg, padding: spacing.md },
+  heroStatItem: { flex: 1, alignItems: 'center' },
+  heroStatValue: { ...typography.h4, color: colors.white },
+  heroStatLabel: { ...typography.tiny, color: 'rgba(255,255,255,0.6)' },
+  heroStatDivider: { width: 1, backgroundColor: 'rgba(255,255,255,0.2)' },
+
+  section: { marginBottom: spacing.md },
+  sectionRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: spacing.sm },
+  sectionTitle: { ...typography.captionBold, color: colors.text, textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: spacing.sm },
+
+  rsvpRow: { flexDirection: 'row', gap: spacing.sm },
+  rsvpBtn: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 5, paddingVertical: 13, borderRadius: borderRadius.lg, backgroundColor: colors.white, borderWidth: 1.5, borderColor: colors.border, ...shadows.xs },
+  rsvpBtnText: { ...typography.captionBold, color: colors.textSecondary },
+  rsvpBtnTextActive: { color: colors.white },
+
+  playerRow: { backgroundColor: colors.white, borderRadius: borderRadius.lg, padding: spacing.md, flexDirection: 'row', alignItems: 'center', gap: spacing.md, marginBottom: spacing.sm, ...shadows.xs },
+  playerRowMaybe: { opacity: 0.7 },
+  playerAvatar: { width: 40, height: 40, borderRadius: 20, backgroundColor: colors.primaryTint, justifyContent: 'center', alignItems: 'center' },
+  playerAvatarMaybe: { backgroundColor: colors.backgroundTertiary },
+  playerAvatarText: { ...typography.captionBold, color: colors.primary },
+  playerInfo: { flex: 1 },
+  playerName: { ...typography.captionBold, color: colors.text },
+  playerPos: { ...typography.small, color: colors.textSecondary },
+  teamBadge: { paddingHorizontal: spacing.sm, paddingVertical: 4, borderRadius: borderRadius.full },
+  teamBadgeText: { ...typography.tiny, fontWeight: '700' },
+
+  guestRow: { backgroundColor: '#FAF5FF', borderRadius: borderRadius.lg, padding: spacing.md, flexDirection: 'row', alignItems: 'center', gap: spacing.md, marginBottom: spacing.sm, borderWidth: 1, borderColor: '#EDE9FE' },
+  guestMeta: { ...typography.small, color: '#7C3AED' },
+
+  adminGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm },
+  adminCard: { flex: 1, minWidth: '45%', backgroundColor: colors.white, borderRadius: borderRadius.xl, padding: spacing.md, alignItems: 'center', gap: spacing.xs, ...shadows.sm, borderWidth: 1.5, borderColor: colors.border },
+  adminCardLocked: { borderColor: colors.accent, backgroundColor: colors.accentTint },
+  adminCardTitle: { ...typography.smallBold, color: colors.primary, textAlign: 'center' },
+  adminCardDesc: { ...typography.tiny, color: colors.textSecondary, textAlign: 'center' },
+
+  postMatchRow: { flexDirection: 'row', gap: spacing.sm },
+  postMatchBtn: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: spacing.sm, paddingVertical: spacing.md, borderRadius: borderRadius.lg, backgroundColor: '#FEF3C7', borderWidth: 1.5, borderColor: '#FDE68A' },
+  postMatchBtnPrimary: { backgroundColor: colors.primary, borderColor: colors.primary },
+  postMatchBtnText: { ...typography.captionBold, color: '#D97706' },
+
+  submitScoreBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: spacing.sm, paddingVertical: spacing.md, borderRadius: borderRadius.lg, backgroundColor: colors.primary, marginBottom: spacing.sm },
+  submitScoreBtnText: { ...typography.captionBold, color: colors.white },
+  motmBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: spacing.sm, paddingVertical: spacing.md, borderRadius: borderRadius.lg, backgroundColor: '#FEF3C7', borderWidth: 1.5, borderColor: '#FDE68A' },
+  motmBtnText: { ...typography.captionBold, color: '#D97706' },
+
+  modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' },
+  modalSheet: { backgroundColor: colors.white, borderTopLeftRadius: borderRadius.xxl, borderTopRightRadius: borderRadius.xxl, padding: spacing.lg, paddingBottom: 40 },
+  modalHandle: { width: 40, height: 4, backgroundColor: colors.border, borderRadius: 2, alignSelf: 'center', marginBottom: spacing.lg },
+  modalTitle: { ...typography.h3, color: colors.primary, marginBottom: spacing.lg },
+  scoreInputRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: spacing.lg, marginBottom: spacing.lg },
+  scoreInputBlock: { alignItems: 'center' },
+  scoreInputLabel: { ...typography.captionBold, color: colors.textSecondary, marginBottom: spacing.sm },
+  scoreInput: { width: 72, height: 72, borderWidth: 2, borderColor: colors.border, borderRadius: borderRadius.xl, textAlign: 'center', fontSize: 32, fontWeight: '700', color: colors.primary },
+  scoreInputVs: { ...typography.h3, color: colors.textTertiary, marginTop: spacing.lg },
+  modalActions: { flexDirection: 'row', gap: spacing.sm },
+  cancelBtn: { flex: 1, paddingVertical: spacing.md, borderRadius: borderRadius.lg, backgroundColor: colors.backgroundTertiary, alignItems: 'center' },
+  cancelBtnText: { ...typography.captionBold, color: colors.textSecondary },
+  confirmBtn: { flex: 1, paddingVertical: spacing.md, borderRadius: borderRadius.lg, backgroundColor: colors.primary, alignItems: 'center' },
+  confirmBtnText: { ...typography.captionBold, color: colors.white },
+});
