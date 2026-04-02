@@ -22,12 +22,14 @@ import {
   getPlayers,
   getCurrentUser,
   getPlayerStats,
+  getAllPlayerRatings,
   generateTeams,
   lockTeams,
   submitScore,
   upsertAttendance,
 } from '@/lib/data';
 import AddGuestModal from '@/components/AddGuestModal';
+import RatingBadge from '@/components/RatingBadge';
 
 export default function MatchDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -70,6 +72,11 @@ export default function MatchDetailScreen() {
     queryKey: ['playerStats', currentUser?.id],
     queryFn: () => getPlayerStats(currentUser!.id),
     enabled: !!currentUser?.id,
+  });
+
+  const { data: ratings } = useQuery({
+    queryKey: ['allPlayerRatings'],
+    queryFn: getAllPlayerRatings,
   });
 
   const generateMutation = useMutation({
@@ -235,6 +242,9 @@ export default function MatchDetailScreen() {
                   <Text style={styles.playerName}>{player?.name ?? att.playerId}</Text>
                   <Text style={styles.playerPos}>{player?.position}</Text>
                 </View>
+                {ratings?.[att.playerId] !== undefined && (
+                  <RatingBadge score={ratings[att.playerId]} size="sm" />
+                )}
                 {att.team && (
                   <View style={[styles.teamBadge, { backgroundColor: att.team === 'A' ? colors.primaryTint : '#FEE2E2' }]}>
                     <Text style={[styles.teamBadgeText, { color: att.team === 'A' ? colors.primary : '#DC2626' }]}>Team {att.team}</Text>

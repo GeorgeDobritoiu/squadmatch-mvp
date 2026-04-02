@@ -11,7 +11,9 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useQuery } from '@tanstack/react-query';
 import { colors, spacing, borderRadius, typography, shadows } from '@/constants/design';
-import { getGroup, getPlayers, getCurrentUser } from '@/lib/data';
+import { getGroup, getPlayers, getCurrentUser, getAllPlayerRatings } from '@/lib/data';
+import { getRatingColor, getRatingLabel } from '@/lib/ratings';
+import RatingBadge from '@/components/RatingBadge';
 import { useRouter } from 'expo-router';
 
 const POSITION_COLORS: Record<string, string> = {
@@ -38,6 +40,11 @@ export default function GroupScreen() {
   const { data: currentUser } = useQuery({
     queryKey: ['currentUser'],
     queryFn: getCurrentUser,
+  });
+
+  const { data: ratings } = useQuery({
+    queryKey: ['allPlayerRatings'],
+    queryFn: getAllPlayerRatings,
   });
 
   const isAdmin = currentUser?.role === 'admin';
@@ -121,10 +128,64 @@ export default function GroupScreen() {
           <Ionicons name="arrow-forward-circle" size={24} color={colors.accent} />
         </TouchableOpacity>
 
+        {/* Squad Ratings overview */}
+        {ratings && (players?.length ?? 0) > 0 && (
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>Squad Ratings</Text>
+            <View style={styles.ratingsCard}>
+              {/* Legend */}
+              <View style={styles.legendRow}>
+                {[
+                  { label: 'Elite',      color: '#16A34A', min: 8   },
+                  { label: 'Good',       color: '#2563EB', min: 6.5 },
+                  { label: 'Average',    color: '#D97706', min: 4.5 },
+                  { label: 'Developing', color: '#6B7280', min: 0   },
+                ].map((tier) => {
+                  const count = (players ?? []).filter((p) => {
+                    const s = ratings[p.id] ?? 3;
+                    return s >= tier.min;
+                  }).length - (
+                    tier.min === 0 ? 0 :
+                    [8, 6.5, 4.5].filter(m => m > tier.min).reduce((acc, m) => acc + (players ?? []).filter(p => (ratings[p.id] ?? 3) >= m).length, 0)
+                    // simplified: just count players in this exact tier
+                  );
+                  const inTier = (players ?? []).filter((p) => {
+                    const s = ratings[p.id] ?? 3;
+                    if (tier.min === 8)   return s >= 8;
+                    if (tier.min === 6.5) return s >= 6.5 && s < 8;
+                    if (tier.min === 4.5) return s >= 4.5 && s < 6.5;
+                    return s < 4.5;
+                  }).length;
+                  return (
+                    <View key={tier.label} style={styles.legendItem}>
+                      <View style={[styles.legendDot, { backgroundColor: tier.color }]} />
+                      <Text style={styles.legendLabel}>{tier.label}</Text>
+                      <Text style={[styles.legendCount, { color: tier.color }]}>{inTier}</Text>
+                    </View>
+                  );
+                })}
+              </View>
+              {/* Average squad rating */}
+              <View style={styles.avgRow}>
+                <Text style={styles.avgLabel}>Squad Avg</Text>
+                <Text style={styles.avgValue}>
+                  {(
+                    (players ?? []).reduce((sum, p) => sum + (ratings[p.id] ?? 3), 0) /
+                    Math.max((players ?? []).length, 1)
+                  ).toFixed(1)}
+                </Text>
+              </View>
+            </View>
+          </View>
+        )}
+
         {/* Members */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Members ({players?.length ?? 0})</Text>
-          {(players ?? []).map((player) => (
+          {(players ?? [])
+            .slice()
+            .sort((a, b) => ((ratings?.[b.id] ?? 3) - (ratings?.[a.id] ?? 3)))
+            .map((player) => (
             <TouchableOpacity key={player.id} style={styles.memberCard} onPress={() => router.push(`/player/${player.id}`)} activeOpacity={0.85}>
               <View style={[styles.memberAvatar, { backgroundColor: player.id === currentUser?.id ? colors.primary : '#E8EDF2' }]}>
                 <Text style={[styles.memberAvatarText, { color: player.id === currentUser?.id ? colors.white : colors.primary }]}>
@@ -152,6 +213,9 @@ export default function GroupScreen() {
                   <Text style={styles.memberSkill}>{player.skillLevel}</Text>
                 </View>
               </View>
+              {ratings?.[player.id] !== undefined && (
+                <RatingBadge score={ratings[player.id]} size="sm" />
+              )}
               <Ionicons name="chevron-forward" size={16} color={colors.textTertiary} />
             </TouchableOpacity>
           ))}
@@ -229,6 +293,21 @@ const styles = StyleSheet.create({
   memberPosition: { ...typography.small, color: colors.textSecondary },
   memberDot: { ...typography.small, color: colors.textTertiary },
   memberSkill: { ...typography.small, color: colors.textSecondary },
+
+  ratingsCard: {
+    backgroundColor: colors.white,
+    borderRadius: borderRadius.xl,
+    padding: spacing.md,
+    ...shadows.sm,
+  },
+  legendRow: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: spacing.md },
+  legendItem: { alignItems: 'center', gap: 4 },
+  legendDot: { width: 10, height: 10, borderRadius: 5 },
+  legendLabel: { ...typography.tiny, color: colors.textSecondary },
+  legendCount: { ...typography.captionBold },
+  avgRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingTop: spacing.sm, borderTopWidth: 1, borderTopColor: colors.border },
+  avgLabel: { ...typography.smallBold, color: colors.textSecondary },
+  avgValue: { ...typography.h3, color: colors.primary },
 
   // Create Team banner
   createTeamBanner: {

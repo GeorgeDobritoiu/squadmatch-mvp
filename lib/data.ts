@@ -1,4 +1,5 @@
 import { blink } from './blink';
+import { computeRating, snakeDraft } from './ratings';
 
 // ── Players ──────────────────────────────────────────────────────────────────
 
@@ -254,33 +255,93 @@ export async function castMotmVote(matchId: string, voterId: string, nomineeId: 
   });
 }
 
-// ── Team Generation ──────────────────────────────────────────────────────────
+// ── Batch player ratings (4 queries for all players) ─────────────────────────
+
+export async function getAllPlayerRatings(): Promise<Record<string, number>> {
+  const [players, allAttendance, allMatches, allVotes] = await Promise.all([
+    blink.db.players.list({}),
+    blink.db.attendance.list({}),
+    blink.db.matches.list({ where: { status: 'closed' } }),
+    blink.db.motmVotes.list({}),
+  ]);
+
+  const ratings: Record<string, number> = {};
+
+  for (const player of players ?? []) {
+    const attended = (allAttendance ?? []).filter(
+      (a) => a.playerId === player.id && a.status === 'yes',
+    );
+    const playedMatchIds = attended.map((a) => a.matchId);
+    const matchesPlayed  = (allMatches ?? []).filter((m) =>
+      playedMatchIds.includes(m.id),
+    );
+
+    // MOTM wins
+    let motmWins = 0;
+    for (const match of allMatches ?? []) {
+      const votes = (allVotes ?? []).filter((v) => v.matchId === match.id);
+      const tally: Record<string, number> = {};
+      votes.forEach((v) => { tally[v.nomineeId] = (tally[v.nomineeId] ?? 0) + 1; });
+      const max = Math.max(0, ...Object.values(tally));
+      if (max > 0 && tally[player.id] === max) motmWins++;
+    }
+
+    // W/D/L
+    let wins = 0, totalGames = 0;
+    for (const match of matchesPlayed) {
+      if (match.scoreA === null || match.scoreB === null) continue;
+      const rec  = attended.find((a) => a.matchId === match.id);
+      const team = rec?.team;
+      if (!team) continue;
+      totalGames++;
+      const mine = team === 'A' ? match.scoreA : match.scoreB;
+      const opp  = team === 'A' ? match.scoreB : match.scoreA;
+      if (mine > opp) wins++;
+    }
+
+    const attendanceRate = (allMatches ?? []).length > 0
+      ? Math.round((matchesPlayed.length / (allMatches ?? []).length) * 100)
+      : 0;
+
+    ratings[player.id] = computeRating({
+      skillLevel: player.skillLevel,
+      motmWins,
+      attendanceRate,
+      wins,
+      totalGames,
+    });
+  }
+
+  return ratings;
+}
+
+// ── Team Generation (snake-draft by rating) ───────────────────────────────────
 
 export async function generateTeams(matchId: string) {
-  const attendance = await blink.db.attendance.list({ where: { matchId, status: 'yes' } });
-  const guests = await blink.db.guests.list({ where: { matchId } });
+  const [attendance, guests, ratings] = await Promise.all([
+    blink.db.attendance.list({ where: { matchId, status: 'yes' } }),
+    blink.db.guests.list({ where: { matchId } }),
+    getAllPlayerRatings(),
+  ]);
 
-  const playerIds = attendance?.map((a) => a.playerId) ?? [];
-  const half = Math.ceil(playerIds.length / 2);
-
-  const shuffled = [...playerIds].sort(() => Math.random() - 0.5);
-  const teamA = shuffled.slice(0, half);
-  const teamB = shuffled.slice(half);
+  // Sort attending players by rating descending, then snake-draft
+  const playerIds = (attendance ?? []).map((a) => a.playerId);
+  const sorted    = [...playerIds].sort((a, b) => (ratings[b] ?? 3) - (ratings[a] ?? 3));
+  const { teamA, teamB } = snakeDraft(sorted);
 
   for (const id of teamA) {
-    const rec = attendance!.find((a) => a.playerId === id);
+    const rec = (attendance ?? []).find((a) => a.playerId === id);
     if (rec) await blink.db.attendance.update(rec.id, { team: 'A' });
   }
   for (const id of teamB) {
-    const rec = attendance!.find((a) => a.playerId === id);
+    const rec = (attendance ?? []).find((a) => a.playerId === id);
     if (rec) await blink.db.attendance.update(rec.id, { team: 'B' });
   }
 
-  // Distribute guests evenly
+  // Distribute guests evenly across teams (A, B, A, B, …)
   const guestList = guests ?? [];
   for (let i = 0; i < guestList.length; i++) {
-    const team = i % 2 === 0 ? 'A' : 'B';
-    await blink.db.guests.update(guestList[i].id, { team });
+    await blink.db.guests.update(guestList[i].id, { team: i % 2 === 0 ? 'A' : 'B' });
   }
 }
 
