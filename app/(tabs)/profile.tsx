@@ -6,10 +6,11 @@ import {
   StyleSheet,
   TouchableOpacity,
   ActivityIndicator,
+  Alert,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useRouter } from 'expo-router';
 import { colors, spacing, borderRadius, typography, shadows } from '@/constants/design';
 import { getCurrentUser, getMatches, getPlayerStats } from '@/lib/data';
@@ -27,6 +28,26 @@ const POSITION_COLOR: Record<string, string> = {
 
 export default function ProfileScreen() {
   const router = useRouter();
+  const queryClient = useQueryClient();
+
+  const handleSignOut = () => {
+    Alert.alert(
+      'Sign Out',
+      'Are you sure you want to sign out?',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Sign Out',
+          style: 'destructive',
+          onPress: () => {
+            queryClient.clear();
+            router.replace('/');
+          },
+        },
+      ],
+    );
+  };
+
   const { data: currentUser, isLoading } = useQuery({
     queryKey: ['currentUser'],
     queryFn: getCurrentUser,
@@ -183,12 +204,12 @@ export default function ProfileScreen() {
         <View style={styles.sectionCard}>
           <Text style={styles.sectionTitle}>Settings</Text>
           {[
-            { icon: 'notifications-outline', label: 'Notifications', color: colors.primary },
-            { icon: 'shield-outline', label: 'Privacy', color: colors.primary },
-            { icon: 'help-circle-outline', label: 'Help & Support', color: colors.primary },
-            { icon: 'log-out-outline', label: 'Sign Out', color: '#EF4444' },
+            { icon: 'notifications-outline', label: 'Notifications', color: colors.primary, onPress: () => {} },
+            { icon: 'shield-outline',        label: 'Privacy',       color: colors.primary, onPress: () => {} },
+            { icon: 'help-circle-outline',   label: 'Help & Support',color: colors.primary, onPress: () => {} },
+            { icon: 'log-out-outline',       label: 'Sign Out',      color: '#EF4444',      onPress: handleSignOut },
           ].map((item, i) => (
-            <TouchableOpacity key={i} style={styles.settingRow}>
+            <TouchableOpacity key={i} style={styles.settingRow} onPress={item.onPress} activeOpacity={0.75}>
               <View style={[styles.settingIcon, { backgroundColor: item.color === '#EF4444' ? '#FEE2E2' : colors.primaryTint }]}>
                 <Ionicons name={item.icon as any} size={18} color={item.color} />
               </View>
