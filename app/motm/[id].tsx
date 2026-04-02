@@ -20,6 +20,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { colors, spacing, borderRadius, typography, shadows } from '@/constants/design';
 import { getAttendance, getPlayers, getCurrentUser, getMotmVotes, castMotmVote } from '@/lib/data';
+import BottomTabBar from '@/components/BottomTabBar';
 
 // ── Team config ───────────────────────────────────────────────────────────────
 
@@ -35,7 +36,7 @@ type TeamKey = 'A' | 'B';
 function tallyVotes(votes: any[], category: TeamKey): Record<string, number> {
   const tally: Record<string, number> = {};
   votes
-    .filter((v) => v.teamCategory === category)
+    .filter((v) => v.team === category)
     .forEach((v) => { tally[v.nomineeId] = (tally[v.nomineeId] ?? 0) + 1; });
   return tally;
 }
@@ -113,10 +114,10 @@ export default function MotmScreen() {
 
   // My votes per category
   const myVoteA = (votes ?? []).find(
-    (v) => v.voterId === currentUser?.id && v.teamCategory === 'A',
+    (v) => v.voterId === currentUser?.id && v.team === 'A',
   );
   const myVoteB = (votes ?? []).find(
-    (v) => v.voterId === currentUser?.id && v.teamCategory === 'B',
+    (v) => v.voterId === currentUser?.id && v.team === 'B',
   );
   const myVote  = activeTab === 'A' ? myVoteA : myVoteB;
 
@@ -380,6 +381,8 @@ export default function MotmScreen() {
 
         <View style={{ height: spacing.xl }} />
       </ScrollView>
+
+      <BottomTabBar />
     </SafeAreaView>
   );
 }

@@ -15,6 +15,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { colors, spacing, borderRadius, typography, shadows } from '@/constants/design';
+import BottomTabBar from '@/components/BottomTabBar';
 import {
   getMatchById,
   getAttendance,
@@ -481,6 +482,8 @@ export default function MatchDetailScreen() {
           queryClient.invalidateQueries({ queryKey: ['guests', id] });
         }}
       />
+
+      <BottomTabBar />
     </SafeAreaView>
   );
 }
