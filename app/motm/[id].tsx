@@ -165,7 +165,7 @@ export default function MotmScreen() {
           </View>
           <Text style={styles.headerTitle}>Vote for your top player</Text>
           <Text style={styles.headerSub}>
-            One vote per team — pick the standout performer from each side.
+            One vote per team — tap <Text style={{ fontWeight: '700' }}>Vote</Text> next to your pick from each side.
           </Text>
 
           {/* My vote status */}
@@ -334,17 +334,25 @@ export default function MotmScreen() {
                       </View>
                     </View>
 
-                    {/* Vote count / indicator */}
+                    {/* Vote count + action button */}
                     <View style={styles.voteRight}>
                       <Text style={[styles.voteCount, isWinner && { color: '#D97706' }]}>
                         {playerVotes}
                       </Text>
-                      {isMe
-                        ? <Text style={styles.cantVote}>—</Text>
-                        : isVotedFor
-                          ? <Ionicons name="checkmark-circle" size={20} color={cfg.color} />
-                          : <Ionicons name="radio-button-off" size={20} color={colors.textTertiary} />
-                      }
+                      {isMe ? (
+                        <View style={styles.cantVoteChip}>
+                          <Text style={styles.cantVoteText}>You</Text>
+                        </View>
+                      ) : isVotedFor ? (
+                        <View style={[styles.votedChip, { backgroundColor: cfg.color }]}>
+                          <Ionicons name="checkmark" size={12} color="#fff" />
+                          <Text style={styles.votedChipText}>Voted</Text>
+                        </View>
+                      ) : (
+                        <View style={[styles.voteChip, { borderColor: cfg.color }]}>
+                          <Text style={[styles.voteChipText, { color: cfg.color }]}>Vote</Text>
+                        </View>
+                      )}
                     </View>
                   </TouchableOpacity>
                 );
@@ -476,9 +484,28 @@ const styles = StyleSheet.create({
   barBg: { height: 4, backgroundColor: colors.backgroundTertiary, borderRadius: 2, overflow: 'hidden' },
   barFill: { height: '100%', borderRadius: 2 },
 
-  voteRight: { alignItems: 'center', gap: 4, minWidth: 32 },
+  voteRight: { alignItems: 'center', gap: 6, minWidth: 52 },
   voteCount: { ...typography.h4, color: colors.primary },
-  cantVote: { ...typography.small, color: colors.textTertiary },
+
+  voteChip: {
+    paddingHorizontal: 10, paddingVertical: 5,
+    borderRadius: borderRadius.full, borderWidth: 1.5,
+  },
+  voteChipText: { ...typography.smallBold },
+
+  votedChip: {
+    flexDirection: 'row', alignItems: 'center', gap: 3,
+    paddingHorizontal: 8, paddingVertical: 5,
+    borderRadius: borderRadius.full,
+  },
+  votedChipText: { ...typography.smallBold, color: '#fff' },
+
+  cantVoteChip: {
+    paddingHorizontal: 8, paddingVertical: 5,
+    borderRadius: borderRadius.full,
+    backgroundColor: colors.backgroundTertiary,
+  },
+  cantVoteText: { ...typography.tiny, color: colors.textTertiary, fontWeight: '600' },
 
   // Done banner
   doneBanner: {
