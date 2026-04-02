@@ -23,7 +23,6 @@ const POSITION_COLORS: Record<string, string> = {
 };
 
 export default function GroupScreen() {
-  const queryClient = useQueryClient();
   const router = useRouter();
 
   const { data: group, isLoading: groupLoading } = useQuery({
@@ -107,6 +106,20 @@ export default function GroupScreen() {
             </View>
           </View>
         )}
+
+        {/* Create new team CTA */}
+        <TouchableOpacity style={styles.createTeamBanner} onPress={() => router.push('/create-team')} activeOpacity={0.85}>
+          <View style={styles.createTeamLeft}>
+            <View style={styles.createTeamIcon}>
+              <Ionicons name="people" size={20} color={colors.white} />
+            </View>
+            <View>
+              <Text style={styles.createTeamTitle}>Create a New Team</Text>
+              <Text style={styles.createTeamSub}>Set up a squad for any sport</Text>
+            </View>
+          </View>
+          <Ionicons name="arrow-forward-circle" size={24} color={colors.accent} />
+        </TouchableOpacity>
 
         {/* Members */}
         <View style={styles.section}>
@@ -216,5 +229,20 @@ const styles = StyleSheet.create({
   memberPosition: { ...typography.small, color: colors.textSecondary },
   memberDot: { ...typography.small, color: colors.textTertiary },
   memberSkill: { ...typography.small, color: colors.textSecondary },
+
+  // Create Team banner
+  createTeamBanner: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+    backgroundColor: colors.primary, borderRadius: borderRadius.xl,
+    padding: spacing.md, marginBottom: spacing.md, ...shadows.sm,
+  },
+  createTeamLeft: { flexDirection: 'row', alignItems: 'center', gap: spacing.md },
+  createTeamIcon: {
+    width: 40, height: 40, borderRadius: borderRadius.lg,
+    backgroundColor: 'rgba(255,255,255,0.15)',
+    justifyContent: 'center', alignItems: 'center',
+  },
+  createTeamTitle: { ...typography.captionBold, color: colors.white },
+  createTeamSub: { ...typography.tiny, color: 'rgba(255,255,255,0.65)', marginTop: 2 },
 
 });

@@ -19,12 +19,8 @@ interface Props {
   accentColor?: string;
 }
 
-// Dynamically require only on native to avoid web bundle errors
-let DateTimePicker: any = null;
-if (Platform.OS !== 'web') {
-  // eslint-disable-next-line @typescript-eslint/no-var-requires
-  DateTimePicker = require('@react-native-community/datetimepicker').default;
-}
+// No native dependency — this component is a pure web/TextInput fallback.
+// The schedule screen uses a custom MiniCalendar instead.
 
 function formatForInput(date: Date, mode: 'date' | 'time') {
   if (mode === 'date') {
@@ -56,23 +52,8 @@ function parseWebInput(value: string, mode: 'date' | 'time', base: Date): Date |
   }
 }
 
-export default function NativeDatePicker({ value, mode, onChange, display, minimumDate, minuteInterval, accentColor }: Props) {
-  if (Platform.OS !== 'web' && DateTimePicker) {
-    return (
-      <DateTimePicker
-        value={value}
-        mode={mode}
-        display={display ?? (mode === 'date' ? 'inline' : 'spinner')}
-        minimumDate={minimumDate}
-        minuteInterval={minuteInterval}
-        onChange={onChange}
-        themeVariant="light"
-        accentColor={accentColor ?? colors.primary}
-      />
-    );
-  }
-
-  // Web fallback: plain HTML-friendly TextInput
+export default function NativeDatePicker({ value, mode, onChange }: Props) {
+  // Pure TextInput fallback — works on all platforms
   return (
     <View style={styles.webContainer}>
       <TextInput

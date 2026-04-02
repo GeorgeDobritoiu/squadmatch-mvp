@@ -19,6 +19,40 @@ export async function getGroup() {
   return groups?.[0] ?? null;
 }
 
+export interface CreateGroupInput {
+  name: string;
+  sport: string;
+  format?: string;
+  frequency?: string;
+  location?: string;
+  description?: string;
+  memberIds?: string[];
+}
+
+export async function createGroup(input: CreateGroupInput) {
+  const id = `grp_${Date.now()}`;
+  // Build a rich description that includes sport/format metadata
+  const meta = [
+    input.sport,
+    input.format,
+    input.frequency,
+  ].filter(Boolean).join(' · ');
+
+  const group = await blink.db.groupsTable.create({
+    id,
+    name: input.name,
+    location: input.location ?? '',
+    description: input.description
+      ? `${input.description}\n\n${meta}`
+      : meta,
+  });
+
+  // If memberIds provided, we don't need to do anything special since
+  // they're already in the players table — the group shares all players.
+  // In a multi-team future you'd create a join table; for now this is MVP.
+  return group;
+}
+
 // ── Matches ──────────────────────────────────────────────────────────────────
 
 export async function getMatches() {

@@ -223,6 +223,12 @@ export default function HomeScreen() {
                 </View>
                 <Text style={styles.actionBtnText}>Calendar</Text>
               </TouchableOpacity>
+              <TouchableOpacity style={styles.actionBtn} onPress={() => router.push('/create-team')}>
+                <View style={[styles.actionIcon, { backgroundColor: '#EDE9FE' }]}>
+                  <Ionicons name="people" size={20} color="#7C3AED" />
+                </View>
+                <Text style={styles.actionBtnText}>New Team</Text>
+              </TouchableOpacity>
             </View>
           </View>
         )}
