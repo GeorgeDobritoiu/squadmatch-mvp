@@ -444,13 +444,22 @@ export default function WelcomeScreen() {
             </View>
           </TouchableOpacity>
 
-          {/* Secondary */}
+          {/* Secondary — Sign Up */}
           <TouchableOpacity
             style={styles.secondaryBtn}
             onPress={() => router.push('/signup')}
             activeOpacity={0.88}
           >
             <Text style={styles.secondaryBtnText}>Sign Up / Get Started</Text>
+          </TouchableOpacity>
+
+          {/* Tertiary — Log In */}
+          <TouchableOpacity
+            style={styles.loginBtn}
+            onPress={() => router.push('/login')}
+            activeOpacity={0.88}
+          >
+            <Text style={styles.loginBtnText}>Log In</Text>
           </TouchableOpacity>
 
           {/* Access code link */}
@@ -586,6 +595,20 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '700',
     color: B.navy,
+    letterSpacing: 0.1,
+  },
+
+  loginBtn: {
+    borderRadius: 16,
+    paddingVertical: 17,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: B.navy,
+  },
+  loginBtnText: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: B.white,
     letterSpacing: 0.1,
   },
 

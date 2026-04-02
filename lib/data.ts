@@ -12,6 +12,15 @@ export async function getCurrentUser() {
   return players?.[0] ?? null;
 }
 
+export async function loginAsPlayer(playerId: string) {
+  // Clear previous current user
+  const existing = await blink.db.players.list({ where: { isCurrentUser: 1 } });
+  for (const p of existing ?? []) {
+    await blink.db.players.update(p.id, { isCurrentUser: 0 });
+  }
+  return blink.db.players.update(playerId, { isCurrentUser: 1 });
+}
+
 export interface CreatePlayerInput {
   name: string;
   position: string;
