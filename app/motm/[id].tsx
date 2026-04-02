@@ -80,9 +80,16 @@ export default function MotmScreen() {
   });
 
   const voteMutation = useMutation({
-    mutationFn: ({ nomineeId, team }: { nomineeId: string; team: TeamKey }) =>
-      castMotmVote(id, currentUser!.id, nomineeId, team),
+    mutationFn: ({ nomineeId, team }: { nomineeId: string; team: TeamKey }) => {
+      if (!currentUser) throw new Error('You must be logged in to vote');
+      return castMotmVote(id, currentUser.id, nomineeId, team);
+    },
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['motmVotes', id] }),
+    onError: (err: any) => {
+      const msg = err?.message ?? 'Vote failed. Please try again.';
+      if (Platform.OS === 'web') window.alert(msg);
+      else Alert.alert('Error', msg);
+    },
   });
 
   // ── Derived data ────────────────────────────────────────────────────────────

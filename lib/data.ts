@@ -259,11 +259,13 @@ export async function castMotmVote(
   nomineeId: string,
   teamCategory: 'A' | 'B',
 ) {
-  // Each voter gets one vote per team category
-  const existing = await blink.db.motmVotes.list({
-    where: { matchId, voterId, teamCategory },
+  // Each voter gets one vote per team category.
+  // Filter teamCategory client-side to avoid schema field constraints.
+  const allExisting = await blink.db.motmVotes.list({
+    where: { matchId, voterId },
   });
-  if (existing?.length) {
+  const existing = (allExisting ?? []).filter((v) => v.teamCategory === teamCategory);
+  if (existing.length) {
     return blink.db.motmVotes.update(existing[0].id, { nomineeId });
   }
   return blink.db.motmVotes.create({
