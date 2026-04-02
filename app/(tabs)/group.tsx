@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useMemo } from 'react';
 import {
   View,
   Text,
@@ -6,13 +6,14 @@ import {
   StyleSheet,
   TouchableOpacity,
   ActivityIndicator,
+  Modal,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useQuery } from '@tanstack/react-query';
 import { colors, spacing, borderRadius, typography, shadows } from '@/constants/design';
 import { getGroup, getPlayers, getCurrentUser, getAllPlayerRatings } from '@/lib/data';
-import { getRatingColor, getRatingLabel } from '@/lib/ratings';
+import { getRatingColor, multiSnakeDraft, computeRating, SKILL_BASE } from '@/lib/ratings';
 import RatingBadge from '@/components/RatingBadge';
 import { useRouter } from 'expo-router';
 
@@ -24,8 +25,20 @@ const POSITION_COLORS: Record<string, string> = {
   Any: '#6B7280',
 };
 
+const TEAM_META = [
+  { letter: 'A', color: '#0F2027', bg: '#E8F4F8', label: 'Team A' },
+  { letter: 'B', color: '#DC2626', bg: '#FEE2E2', label: 'Team B' },
+  { letter: 'C', color: '#7C3AED', bg: '#EDE9FE', label: 'Team C' },
+  { letter: 'D', color: '#D97706', bg: '#FEF3C7', label: 'Team D' },
+];
+
 export default function GroupScreen() {
   const router = useRouter();
+
+  const [teamsModal, setTeamsModal] = useState(false);
+  const [numTeams, setNumTeams]     = useState<2 | 3 | 4 | null>(null);
+  type GeneratedTeam = { meta: typeof TEAM_META[0]; players: { id: string; name: string; position: string; rating: number }[]; total: number };
+  const [generated, setGenerated]   = useState<GeneratedTeam[] | null>(null);
 
   const { data: group, isLoading: groupLoading } = useQuery({
     queryKey: ['group'],
@@ -48,6 +61,38 @@ export default function GroupScreen() {
   });
 
   const isAdmin = currentUser?.role === 'admin';
+
+  const handleGenerateTeams = (n: 2 | 3 | 4) => {
+    setNumTeams(n);
+    const allPlayers = players ?? [];
+    const allRatings = ratings ?? {};
+
+    // Sort by rating descending
+    const sorted = [...allPlayers].sort(
+      (a, b) => (allRatings[b.id] ?? 3) - (allRatings[a.id] ?? 3),
+    );
+
+    const playerGroups = multiSnakeDraft(sorted, n);
+
+    const result: GeneratedTeam[] = playerGroups.map((group, i) => {
+      const meta = TEAM_META[i];
+      const teamPlayers = group.map((p) => ({
+        id: p.id,
+        name: p.name,
+        position: p.position,
+        rating: allRatings[p.id] ?? computeRating({ skillLevel: p.skillLevel, motmWins: 0, attendanceRate: 0, wins: 0, totalGames: 0 }),
+      }));
+      const total = Math.round(teamPlayers.reduce((s, p) => s + p.rating, 0) * 10) / 10;
+      return { meta, players: teamPlayers, total };
+    });
+
+    setGenerated(result);
+  };
+
+  const resetTeams = () => {
+    setGenerated(null);
+    setNumTeams(null);
+  };
 
   if (groupLoading || playersLoading) {
     return (
@@ -111,6 +156,21 @@ export default function GroupScreen() {
                 <Text style={[styles.adminBtnText, styles.adminBtnTextOutline]}>Calendar</Text>
               </TouchableOpacity>
             </View>
+            {/* Create Teams CTA */}
+            <TouchableOpacity
+              style={styles.createTeamsBtn}
+              onPress={() => { resetTeams(); setTeamsModal(true); }}
+              activeOpacity={0.88}
+            >
+              <View style={styles.createTeamsBtnIcon}>
+                <Ionicons name="people" size={20} color={colors.white} />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.createTeamsBtnTitle}>Create Teams</Text>
+                <Text style={styles.createTeamsBtnSub}>Split squad into balanced teams</Text>
+              </View>
+              <Ionicons name="chevron-forward" size={18} color={colors.white} />
+            </TouchableOpacity>
           </View>
         )}
 
@@ -224,7 +284,111 @@ export default function GroupScreen() {
         <View style={{ height: spacing.xl }} />
       </ScrollView>
 
-      {/* Create Match Modal */}
+      {/* ── Create Teams Modal ── */}
+      <Modal visible={teamsModal} animationType="slide" transparent>
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalSheet}>
+            <View style={styles.modalHandle} />
+
+            {/* Header */}
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>
+                {generated ? 'Balanced Teams' : 'Create Teams'}
+              </Text>
+              <TouchableOpacity
+                style={styles.modalClose}
+                onPress={() => setTeamsModal(false)}
+              >
+                <Ionicons name="close" size={20} color={colors.primary} />
+              </TouchableOpacity>
+            </View>
+
+            {!generated ? (
+              /* ── Step 1: choose number of teams ── */
+              <>
+                <Text style={styles.modalSub}>
+                  Select how many teams to create from {players?.length ?? 0} players.
+                  Teams will be balanced by rating.
+                </Text>
+                <View style={styles.teamCountRow}>
+                  {([2, 3, 4] as const).map((n) => (
+                    <TouchableOpacity
+                      key={n}
+                      style={styles.teamCountCard}
+                      onPress={() => handleGenerateTeams(n)}
+                      activeOpacity={0.8}
+                    >
+                      <View style={styles.teamCountIcons}>
+                        {Array.from({ length: n }).map((_, i) => (
+                          <View
+                            key={i}
+                            style={[styles.teamCountDot, { backgroundColor: TEAM_META[i].color }]}
+                          />
+                        ))}
+                      </View>
+                      <Text style={styles.teamCountNum}>{n}</Text>
+                      <Text style={styles.teamCountLabel}>Teams</Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              </>
+            ) : (
+              /* ── Step 2: preview generated teams ── */
+              <ScrollView showsVerticalScrollIndicator={false} style={{ maxHeight: 440 }}>
+                <Text style={styles.modalSub}>
+                  Balanced via snake draft · {numTeams} teams · {players?.length ?? 0} players
+                </Text>
+
+                {/* Balance bar */}
+                <View style={styles.balanceRow}>
+                  {generated.map((team) => (
+                    <View key={team.meta.letter} style={[styles.balanceItem, { borderColor: team.meta.color + '44', backgroundColor: team.meta.bg }]}>
+                      <Text style={[styles.balanceLetter, { color: team.meta.color }]}>{team.meta.letter}</Text>
+                      <Text style={[styles.balanceTotal, { color: team.meta.color }]}>{team.total.toFixed(1)}</Text>
+                      <Text style={styles.balanceSub}>total</Text>
+                    </View>
+                  ))}
+                </View>
+
+                {/* Team cards */}
+                {generated.map((team) => (
+                  <View key={team.meta.letter} style={[styles.teamCard, { borderLeftColor: team.meta.color }]}>
+                    <View style={[styles.teamCardHeader, { backgroundColor: team.meta.bg }]}>
+                      <Text style={[styles.teamCardTitle, { color: team.meta.color }]}>{team.meta.label}</Text>
+                      <Text style={[styles.teamCardCount, { color: team.meta.color }]}>{team.players.length} players</Text>
+                    </View>
+                    {team.players.map((p) => (
+                      <View key={p.id} style={styles.teamPlayerRow}>
+                        <View style={[styles.teamPlayerAvatar, { backgroundColor: POSITION_COLORS[p.position] + '22' }]}>
+                          <Text style={[styles.teamPlayerInitial, { color: POSITION_COLORS[p.position] ?? colors.primary }]}>
+                            {p.name.charAt(0)}
+                          </Text>
+                        </View>
+                        <View style={{ flex: 1 }}>
+                          <Text style={styles.teamPlayerName}>{p.name}</Text>
+                          <Text style={styles.teamPlayerPos}>{p.position}</Text>
+                        </View>
+                        <RatingBadge score={p.rating} size="sm" />
+                      </View>
+                    ))}
+                  </View>
+                ))}
+
+                {/* Regenerate */}
+                <TouchableOpacity
+                  style={styles.regenBtn}
+                  onPress={() => handleGenerateTeams(numTeams!)}
+                >
+                  <Ionicons name="shuffle" size={16} color={colors.primary} />
+                  <Text style={styles.regenBtnText}>Regenerate</Text>
+                </TouchableOpacity>
+
+                <View style={{ height: spacing.lg }} />
+              </ScrollView>
+            )}
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -308,6 +472,89 @@ const styles = StyleSheet.create({
   avgRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingTop: spacing.sm, borderTopWidth: 1, borderTopColor: colors.border },
   avgLabel: { ...typography.smallBold, color: colors.textSecondary },
   avgValue: { ...typography.h3, color: colors.primary },
+
+  // Create Teams button
+  createTeamsBtn: {
+    flexDirection: 'row', alignItems: 'center', gap: spacing.md,
+    backgroundColor: colors.primary, borderRadius: borderRadius.xl,
+    padding: spacing.md, marginTop: spacing.sm, ...shadows.sm,
+  },
+  createTeamsBtnIcon: {
+    width: 40, height: 40, borderRadius: borderRadius.lg,
+    backgroundColor: 'rgba(255,255,255,0.15)',
+    justifyContent: 'center', alignItems: 'center',
+  },
+  createTeamsBtnTitle: { ...typography.captionBold, color: colors.white },
+  createTeamsBtnSub: { ...typography.tiny, color: 'rgba(255,255,255,0.65)', marginTop: 2 },
+
+  // Modal
+  modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.45)', justifyContent: 'flex-end' },
+  modalSheet: {
+    backgroundColor: colors.white,
+    borderTopLeftRadius: borderRadius.xxl, borderTopRightRadius: borderRadius.xxl,
+    padding: spacing.lg, paddingBottom: 40,
+  },
+  modalHandle: { width: 40, height: 4, backgroundColor: colors.border, borderRadius: 2, alignSelf: 'center', marginBottom: spacing.md },
+  modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: spacing.sm },
+  modalTitle: { ...typography.h3, color: colors.primary },
+  modalClose: { width: 32, height: 32, borderRadius: 16, backgroundColor: colors.backgroundTertiary, justifyContent: 'center', alignItems: 'center' },
+  modalSub: { ...typography.caption, color: colors.textSecondary, marginBottom: spacing.lg, lineHeight: 20 },
+
+  // Team count selector
+  teamCountRow: { flexDirection: 'row', gap: spacing.md, marginBottom: spacing.md },
+  teamCountCard: {
+    flex: 1, backgroundColor: colors.backgroundSecondary,
+    borderRadius: borderRadius.xl, padding: spacing.md,
+    alignItems: 'center', gap: spacing.sm,
+    borderWidth: 1.5, borderColor: colors.border, ...shadows.xs,
+  },
+  teamCountIcons: { flexDirection: 'row', gap: 5, flexWrap: 'wrap', justifyContent: 'center' },
+  teamCountDot: { width: 14, height: 14, borderRadius: 7 },
+  teamCountNum: { ...typography.h2, color: colors.primary },
+  teamCountLabel: { ...typography.tiny, color: colors.textSecondary },
+
+  // Balance summary
+  balanceRow: { flexDirection: 'row', gap: spacing.sm, marginBottom: spacing.md },
+  balanceItem: {
+    flex: 1, alignItems: 'center', padding: spacing.sm,
+    borderRadius: borderRadius.lg, borderWidth: 1.5,
+  },
+  balanceLetter: { ...typography.captionBold, marginBottom: 2 },
+  balanceTotal: { ...typography.h3 },
+  balanceSub: { ...typography.tiny, color: colors.textSecondary },
+
+  // Team cards
+  teamCard: {
+    borderRadius: borderRadius.lg, overflow: 'hidden',
+    marginBottom: spacing.sm, borderLeftWidth: 3,
+    borderWidth: 1, borderColor: colors.border, ...shadows.xs,
+  },
+  teamCardHeader: {
+    flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
+    paddingHorizontal: spacing.md, paddingVertical: spacing.sm,
+  },
+  teamCardTitle: { ...typography.captionBold },
+  teamCardCount: { ...typography.tiny, fontWeight: '600' },
+  teamPlayerRow: {
+    flexDirection: 'row', alignItems: 'center', gap: spacing.md,
+    paddingHorizontal: spacing.md, paddingVertical: spacing.sm,
+    backgroundColor: colors.white,
+    borderTopWidth: 1, borderTopColor: colors.backgroundTertiary,
+  },
+  teamPlayerAvatar: { width: 32, height: 32, borderRadius: 16, justifyContent: 'center', alignItems: 'center' },
+  teamPlayerInitial: { ...typography.captionBold },
+  teamPlayerName: { ...typography.smallBold, color: colors.text },
+  teamPlayerPos: { ...typography.tiny, color: colors.textSecondary },
+
+  // Regenerate
+  regenBtn: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
+    gap: spacing.sm, marginTop: spacing.sm,
+    paddingVertical: spacing.md, borderRadius: borderRadius.lg,
+    borderWidth: 1.5, borderColor: colors.border,
+    backgroundColor: colors.backgroundSecondary,
+  },
+  regenBtnText: { ...typography.captionBold, color: colors.primary },
 
   // Create Team banner
   createTeamBanner: {

@@ -92,6 +92,30 @@ export function snakeDraft<T>(sorted: T[]): { teamA: T[]; teamB: T[] } {
   return { teamA, teamB };
 }
 
+// ── Multi-team snake draft ────────────────────────────────────────────────────
+
+/**
+ * Generalised snake draft for N teams.
+ * Even rounds go forward  (0 → N-1),
+ * Odd  rounds go backward (N-1 → 0).
+ *
+ * Example with 3 teams and 9 players sorted by rating:
+ *   Round 0 (→): A P1  B P2  C P3
+ *   Round 1 (←): C P4  B P5  A P6
+ *   Round 2 (→): A P7  B P8  C P9
+ *   Total A≈B≈C
+ */
+export function multiSnakeDraft<T>(sorted: T[], numTeams: number): T[][] {
+  const teams: T[][] = Array.from({ length: numTeams }, () => []);
+  sorted.forEach((item, i) => {
+    const round      = Math.floor(i / numTeams);
+    const posInRound = i % numTeams;
+    const teamIndex  = round % 2 === 0 ? posInRound : numTeams - 1 - posInRound;
+    teams[teamIndex].push(item);
+  });
+  return teams;
+}
+
 // ── Balance summary ───────────────────────────────────────────────────────────
 
 export interface TeamBalance {
