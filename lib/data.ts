@@ -218,6 +218,32 @@ export async function generateTeams(matchId: string) {
   }
 }
 
+// ── Match Scheduling ─────────────────────────────────────────────────────────
+
+export interface CreateMatchInput {
+  groupId: string;
+  date: string;        // YYYY-MM-DD
+  time: string;        // HH:MM
+  location: string;
+  costPerPlayer: number;
+  notes?: string;
+  pitchName?: string;
+}
+
+export async function createMatch(input: CreateMatchInput) {
+  const id = `m_${Date.now()}`;
+  return blink.db.matches.create({
+    id,
+    groupId: input.groupId,
+    date: input.date,
+    time: input.time,
+    location: input.location,
+    costPerPlayer: input.costPerPlayer,
+    status: 'open',
+    teamsLocked: 0,
+  });
+}
+
 export async function lockTeams(matchId: string) {
   return blink.db.matches.update(matchId, { teamsLocked: 1 });
 }

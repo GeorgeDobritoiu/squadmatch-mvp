@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React from 'react';
 import {
   View,
   Text,
@@ -6,17 +6,13 @@ import {
   StyleSheet,
   TouchableOpacity,
   ActivityIndicator,
-  Modal,
-  TextInput,
-  Alert,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useQuery } from '@tanstack/react-query';
 import { colors, spacing, borderRadius, typography, shadows } from '@/constants/design';
 import { getGroup, getPlayers, getCurrentUser } from '@/lib/data';
 import { useRouter } from 'expo-router';
-import { blink } from '@/lib/blink';
 
 const POSITION_COLORS: Record<string, string> = {
   Goalkeeper: '#7C3AED',
@@ -29,11 +25,6 @@ const POSITION_COLORS: Record<string, string> = {
 export default function GroupScreen() {
   const queryClient = useQueryClient();
   const router = useRouter();
-  const [createMatchModal, setCreateMatchModal] = useState(false);
-  const [matchDate, setMatchDate] = useState('2026-04-13');
-  const [matchTime, setMatchTime] = useState('10:00');
-  const [matchLocation, setMatchLocation] = useState('Hackney Marshes, Pitch 3');
-  const [matchCost, setMatchCost] = useState('8');
 
   const { data: group, isLoading: groupLoading } = useQuery({
     queryKey: ['group'],
@@ -48,27 +39,6 @@ export default function GroupScreen() {
   const { data: currentUser } = useQuery({
     queryKey: ['currentUser'],
     queryFn: getCurrentUser,
-  });
-
-  const createMatchMutation = useMutation({
-    mutationFn: async () => {
-      return blink.db.matches.create({
-        id: `m_${Date.now()}`,
-        groupId: group?.id ?? 'grp1',
-        date: matchDate,
-        time: matchTime,
-        location: matchLocation,
-        costPerPlayer: parseFloat(matchCost),
-        status: 'open',
-        teamsLocked: 0,
-      });
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['matches'] });
-      queryClient.invalidateQueries({ queryKey: ['nextMatch'] });
-      setCreateMatchModal(false);
-      Alert.alert('Match Created!', 'The new match has been scheduled.');
-    },
   });
 
   const isAdmin = currentUser?.role === 'admin';
@@ -126,13 +96,13 @@ export default function GroupScreen() {
           <View style={styles.adminSection}>
             <Text style={styles.sectionTitle}>Admin</Text>
             <View style={styles.adminRow}>
-              <TouchableOpacity style={styles.adminBtn} onPress={() => setCreateMatchModal(true)}>
+              <TouchableOpacity style={styles.adminBtn} onPress={() => router.push('/schedule')}>
                 <Ionicons name="add-circle-outline" size={20} color={colors.primary} />
-                <Text style={styles.adminBtnText}>Create Match</Text>
+                <Text style={styles.adminBtnText}>Schedule Match</Text>
               </TouchableOpacity>
-              <TouchableOpacity style={[styles.adminBtn, styles.adminBtnOutline]}>
-                <Ionicons name="settings-outline" size={20} color={colors.textSecondary} />
-                <Text style={[styles.adminBtnText, styles.adminBtnTextOutline]}>Settings</Text>
+              <TouchableOpacity style={[styles.adminBtn, styles.adminBtnOutline]} onPress={() => router.push('/calendar')}>
+                <Ionicons name="calendar-outline" size={20} color={colors.textSecondary} />
+                <Text style={[styles.adminBtnText, styles.adminBtnTextOutline]}>Calendar</Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -178,59 +148,6 @@ export default function GroupScreen() {
       </ScrollView>
 
       {/* Create Match Modal */}
-      <Modal visible={createMatchModal} animationType="slide" transparent>
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalSheet}>
-            <View style={styles.modalHandle} />
-            <Text style={styles.modalTitle}>Create New Match</Text>
-
-            <Text style={styles.inputLabel}>Date</Text>
-            <TextInput
-              style={styles.input}
-              value={matchDate}
-              onChangeText={setMatchDate}
-              placeholder="YYYY-MM-DD"
-            />
-
-            <Text style={styles.inputLabel}>Time</Text>
-            <TextInput
-              style={styles.input}
-              value={matchTime}
-              onChangeText={setMatchTime}
-              placeholder="10:00"
-            />
-
-            <Text style={styles.inputLabel}>Location</Text>
-            <TextInput
-              style={styles.input}
-              value={matchLocation}
-              onChangeText={setMatchLocation}
-              placeholder="Pitch location"
-            />
-
-            <Text style={styles.inputLabel}>Cost per player (£)</Text>
-            <TextInput
-              style={styles.input}
-              value={matchCost}
-              onChangeText={setMatchCost}
-              placeholder="8"
-              keyboardType="decimal-pad"
-            />
-
-            <View style={styles.modalActions}>
-              <TouchableOpacity style={styles.cancelBtn} onPress={() => setCreateMatchModal(false)}>
-                <Text style={styles.cancelBtnText}>Cancel</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={styles.createBtn}
-                onPress={() => createMatchMutation.mutate()}
-              >
-                <Text style={styles.createBtnText}>Create Match</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        </View>
-      </Modal>
     </SafeAreaView>
   );
 }
@@ -300,16 +217,4 @@ const styles = StyleSheet.create({
   memberDot: { ...typography.small, color: colors.textTertiary },
   memberSkill: { ...typography.small, color: colors.textSecondary },
 
-  // Modal
-  modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' },
-  modalSheet: { backgroundColor: colors.white, borderTopLeftRadius: borderRadius.xxl, borderTopRightRadius: borderRadius.xxl, padding: spacing.lg, paddingBottom: 40 },
-  modalHandle: { width: 40, height: 4, backgroundColor: colors.border, borderRadius: 2, alignSelf: 'center', marginBottom: spacing.lg },
-  modalTitle: { ...typography.h3, color: colors.primary, marginBottom: spacing.lg },
-  inputLabel: { ...typography.smallBold, color: colors.textSecondary, marginBottom: spacing.xs },
-  input: { borderWidth: 1.5, borderColor: colors.border, borderRadius: borderRadius.lg, paddingHorizontal: spacing.md, paddingVertical: spacing.sm, marginBottom: spacing.md, ...typography.body, color: colors.text },
-  modalActions: { flexDirection: 'row', gap: spacing.sm, marginTop: spacing.sm },
-  cancelBtn: { flex: 1, paddingVertical: spacing.md, borderRadius: borderRadius.lg, backgroundColor: colors.backgroundTertiary, alignItems: 'center' },
-  cancelBtnText: { ...typography.captionBold, color: colors.textSecondary },
-  createBtn: { flex: 1, paddingVertical: spacing.md, borderRadius: borderRadius.lg, backgroundColor: colors.primary, alignItems: 'center' },
-  createBtnText: { ...typography.captionBold, color: colors.white },
 });

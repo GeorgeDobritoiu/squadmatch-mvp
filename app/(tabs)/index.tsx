@@ -217,6 +217,12 @@ export default function HomeScreen() {
                   <Text style={styles.actionBtnText}>My Team</Text>
                 </TouchableOpacity>
               ) : null}
+              <TouchableOpacity style={styles.actionBtn} onPress={() => router.push('/calendar')}>
+                <View style={[styles.actionIcon, { backgroundColor: '#FEF3C7' }]}>
+                  <Ionicons name="calendar-outline" size={20} color="#D97706" />
+                </View>
+                <Text style={styles.actionBtnText}>Calendar</Text>
+              </TouchableOpacity>
             </View>
           </View>
         )}
