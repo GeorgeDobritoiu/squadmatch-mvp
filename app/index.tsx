@@ -447,10 +447,19 @@ export default function WelcomeScreen() {
           {/* Secondary */}
           <TouchableOpacity
             style={styles.secondaryBtn}
-            onPress={() => router.push('/(tabs)')}
+            onPress={() => router.replace('/(tabs)')}
             activeOpacity={0.88}
           >
-            <Text style={styles.secondaryBtnText}>Got an Access Code?</Text>
+            <Text style={styles.secondaryBtnText}>Sign Up / Get Started</Text>
+          </TouchableOpacity>
+
+          {/* Access code link */}
+          <TouchableOpacity
+            style={styles.accessCodeBtn}
+            onPress={() => router.replace('/(tabs)')}
+            activeOpacity={0.75}
+          >
+            <Text style={styles.accessCodeText}>Got an Access Code?  <Text style={styles.accessCodeLink}>Enter here</Text></Text>
           </TouchableOpacity>
         </View>
 
@@ -578,6 +587,20 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: B.navy,
     letterSpacing: 0.1,
+  },
+
+  accessCodeBtn: {
+    alignItems: 'center',
+    paddingVertical: 6,
+  },
+  accessCodeText: {
+    fontSize: 13,
+    color: B.grey500,
+  },
+  accessCodeLink: {
+    color: B.grey700,
+    fontWeight: '600',
+    textDecorationLine: 'underline',
   },
 
   // Footer
