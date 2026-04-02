@@ -33,7 +33,7 @@ export default function ProfileScreen() {
 
   const doSignOut = () => {
     queryClient.clear();
-    router.replace('/');
+    router.replace('/welcome');
   };
 
   const handleSignOut = () => {

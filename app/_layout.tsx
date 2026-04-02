@@ -18,6 +18,8 @@ export default function RootLayout() {
   return (
     <QueryClientProvider client={queryClient}>
       <Stack screenOptions={{ headerShown: false }}>
+        <Stack.Screen name="index" options={{ headerShown: false }} />
+        <Stack.Screen name="welcome" options={{ headerShown: false }} />
         <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
         <Stack.Screen name="match/[id]" options={{ headerShown: false }} />
         <Stack.Screen name="teams/[id]" options={{ headerShown: false }} />

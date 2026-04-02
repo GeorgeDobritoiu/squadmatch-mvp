@@ -90,7 +90,7 @@ export default function GroupInviteScreen() {
 
           <TouchableOpacity
             style={styles.dashboardBtn}
-            onPress={() => router.replace('/(tabs)')}
+            onPress={() => router.replace('/home')}
             activeOpacity={0.88}
           >
             <Text style={styles.dashboardBtnText}>Go to Dashboard</Text>
