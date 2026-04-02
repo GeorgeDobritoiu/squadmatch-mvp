@@ -21,6 +21,7 @@ import {
   getGuests,
   getPlayers,
   getCurrentUser,
+  getPlayerStats,
   generateTeams,
   lockTeams,
   submitScore,
@@ -63,6 +64,12 @@ export default function MatchDetailScreen() {
   const { data: currentUser } = useQuery({
     queryKey: ['currentUser'],
     queryFn: getCurrentUser,
+  });
+
+  const { data: playerStats } = useQuery({
+    queryKey: ['playerStats', currentUser?.id],
+    queryFn: () => getPlayerStats(currentUser!.id),
+    enabled: !!currentUser?.id,
   });
 
   const generateMutation = useMutation({
@@ -287,6 +294,30 @@ export default function MatchDetailScreen() {
                 </View>
               );
             })}
+          </View>
+        )}
+
+        {/* Player Stats */}
+        {currentUser && playerStats && (
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>Your Stats</Text>
+            <View style={styles.playerStatsCard}>
+              <View style={styles.playerStatItem}>
+                <Text style={styles.playerStatValue}>{playerStats.attendanceRate}%</Text>
+                <Text style={styles.playerStatLabel}>Attendance</Text>
+              </View>
+              <View style={styles.playerStatDivider} />
+              <View style={styles.playerStatItem}>
+                <Ionicons name="trophy-outline" size={18} color="#D97706" style={{ marginBottom: 2 }} />
+                <Text style={styles.playerStatValue}>{playerStats.motmWins}</Text>
+                <Text style={styles.playerStatLabel}>MOTM Awards</Text>
+              </View>
+              <View style={styles.playerStatDivider} />
+              <View style={styles.playerStatItem}>
+                <Text style={styles.playerStatValue}>{playerStats.matchesPlayed}</Text>
+                <Text style={styles.playerStatLabel}>Played</Text>
+              </View>
+            </View>
           </View>
         )}
 
@@ -526,4 +557,19 @@ const styles = StyleSheet.create({
   cancelBtnText: { ...typography.captionBold, color: colors.textSecondary },
   confirmBtn: { flex: 1, paddingVertical: spacing.md, borderRadius: borderRadius.lg, backgroundColor: colors.primary, alignItems: 'center' },
   confirmBtnText: { ...typography.captionBold, color: colors.white },
+
+  playerStatsCard: {
+    backgroundColor: colors.white,
+    borderRadius: borderRadius.xl,
+    padding: spacing.md,
+    flexDirection: 'row',
+    alignItems: 'center',
+    ...shadows.sm,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  playerStatItem: { flex: 1, alignItems: 'center', gap: 2 },
+  playerStatValue: { ...typography.h4, color: colors.primary },
+  playerStatLabel: { ...typography.tiny, color: colors.textSecondary },
+  playerStatDivider: { width: 1, height: 36, backgroundColor: colors.border },
 });

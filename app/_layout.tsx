@@ -27,6 +27,8 @@ export default function RootLayout() {
         <Stack.Screen name="schedule" options={{ headerShown: false }} />
         <Stack.Screen name="calendar" options={{ headerShown: false }} />
         <Stack.Screen name="create-team" options={{ headerShown: false }} />
+        <Stack.Screen name="create-group" options={{ headerShown: false }} />
+        <Stack.Screen name="group-invite" options={{ headerShown: false }} />
         <Stack.Screen name="+not-found" />
       </Stack>
       <StatusBar style="dark" />

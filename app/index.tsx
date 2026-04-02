@@ -422,7 +422,7 @@ export default function WelcomeScreen() {
           {/* Primary */}
           <TouchableOpacity
             style={styles.primaryBtn}
-            onPress={() => router.push('/create-team')}
+            onPress={() => router.push('/create-group')}
             activeOpacity={0.88}
           >
             <View style={styles.primaryBtnInner}>
