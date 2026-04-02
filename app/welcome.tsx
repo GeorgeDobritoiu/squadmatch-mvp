@@ -447,7 +447,7 @@ export default function WelcomeScreen() {
           {/* Secondary */}
           <TouchableOpacity
             style={styles.secondaryBtn}
-            onPress={() => router.replace('/home')}
+            onPress={() => router.push('/signup')}
             activeOpacity={0.88}
           >
             <Text style={styles.secondaryBtnText}>Sign Up / Get Started</Text>
@@ -456,7 +456,7 @@ export default function WelcomeScreen() {
           {/* Access code link */}
           <TouchableOpacity
             style={styles.accessCodeBtn}
-            onPress={() => router.replace('/home')}
+            onPress={() => router.push('/signup')}
             activeOpacity={0.75}
           >
             <Text style={styles.accessCodeText}>Got an Access Code?  <Text style={styles.accessCodeLink}>Enter here</Text></Text>

@@ -12,6 +12,29 @@ export async function getCurrentUser() {
   return players?.[0] ?? null;
 }
 
+export interface CreatePlayerInput {
+  name: string;
+  position: string;
+  skillLevel: string;
+}
+
+export async function createPlayer(input: CreatePlayerInput) {
+  // Clear any previous "current user" flag first
+  const existing = await blink.db.players.list({ where: { isCurrentUser: 1 } });
+  for (const p of existing ?? []) {
+    await blink.db.players.update(p.id, { isCurrentUser: 0 });
+  }
+  const id = `p_${Date.now()}`;
+  return blink.db.players.create({
+    id,
+    name: input.name.trim(),
+    position: input.position,
+    skillLevel: input.skillLevel,
+    role: 'player',
+    isCurrentUser: 1,
+  });
+}
+
 // ── Group ────────────────────────────────────────────────────────────────────
 
 export async function getGroup() {
