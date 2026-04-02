@@ -191,17 +191,28 @@ export async function getPlayerStats(playerId: string) {
   const closedMatches = (allMatches ?? []).filter((m) => m.status === 'closed');
   const matchesPlayed = closedMatches.filter((m) => playedMatchIds.includes(m.id));
 
-  // MOTM wins — matches where they received the most votes
+  // MOTM wins — count wins per team category (A and B separately)
   const allVotes = await blink.db.motmVotes.list({});
   let motmWins = 0;
   for (const match of closedMatches) {
     const matchVotes = (allVotes ?? []).filter((v) => v.matchId === match.id);
-    const voteCount: Record<string, number> = {};
-    matchVotes.forEach((v) => {
-      voteCount[v.nomineeId] = (voteCount[v.nomineeId] ?? 0) + 1;
-    });
-    const maxVotes = Math.max(0, ...Object.values(voteCount));
-    if (maxVotes > 0 && voteCount[playerId] === maxVotes) motmWins++;
+    // Per-category voting (new format)
+    for (const cat of ['A', 'B'] as const) {
+      const catVotes = matchVotes.filter((v) => v.teamCategory === cat);
+      if (catVotes.length === 0) continue;
+      const tally: Record<string, number> = {};
+      catVotes.forEach((v) => { tally[v.nomineeId] = (tally[v.nomineeId] ?? 0) + 1; });
+      const max = Math.max(0, ...Object.values(tally));
+      if (max > 0 && tally[playerId] === max) motmWins++;
+    }
+    // Legacy votes without teamCategory — treat as one overall vote
+    const legacyVotes = matchVotes.filter((v) => !v.teamCategory);
+    if (legacyVotes.length > 0) {
+      const tally: Record<string, number> = {};
+      legacyVotes.forEach((v) => { tally[v.nomineeId] = (tally[v.nomineeId] ?? 0) + 1; });
+      const max = Math.max(0, ...Object.values(tally));
+      if (max > 0 && tally[playerId] === max) motmWins++;
+    }
   }
 
   // Attendance rate (% of closed matches they attended)
@@ -242,16 +253,25 @@ export async function getMotmVotes(matchId: string) {
   return blink.db.motmVotes.list({ where: { matchId } });
 }
 
-export async function castMotmVote(matchId: string, voterId: string, nomineeId: string) {
-  const existing = await blink.db.motmVotes.list({ where: { matchId, voterId } });
+export async function castMotmVote(
+  matchId: string,
+  voterId: string,
+  nomineeId: string,
+  teamCategory: 'A' | 'B',
+) {
+  // Each voter gets one vote per team category
+  const existing = await blink.db.motmVotes.list({
+    where: { matchId, voterId, teamCategory },
+  });
   if (existing?.length) {
     return blink.db.motmVotes.update(existing[0].id, { nomineeId });
   }
   return blink.db.motmVotes.create({
-    id: `vote_${Date.now()}`,
+    id: `vote_${teamCategory}_${Date.now()}`,
     matchId,
     voterId,
     nomineeId,
+    teamCategory,
   });
 }
 
@@ -276,14 +296,25 @@ export async function getAllPlayerRatings(): Promise<Record<string, number>> {
       playedMatchIds.includes(m.id),
     );
 
-    // MOTM wins
+    // MOTM wins — per team category (new) + legacy fallback
     let motmWins = 0;
     for (const match of allMatches ?? []) {
-      const votes = (allVotes ?? []).filter((v) => v.matchId === match.id);
-      const tally: Record<string, number> = {};
-      votes.forEach((v) => { tally[v.nomineeId] = (tally[v.nomineeId] ?? 0) + 1; });
-      const max = Math.max(0, ...Object.values(tally));
-      if (max > 0 && tally[player.id] === max) motmWins++;
+      const matchVotes = (allVotes ?? []).filter((v) => v.matchId === match.id);
+      for (const cat of ['A', 'B'] as const) {
+        const catVotes = matchVotes.filter((v) => v.teamCategory === cat);
+        if (catVotes.length === 0) continue;
+        const tally: Record<string, number> = {};
+        catVotes.forEach((v) => { tally[v.nomineeId] = (tally[v.nomineeId] ?? 0) + 1; });
+        const max = Math.max(0, ...Object.values(tally));
+        if (max > 0 && tally[player.id] === max) motmWins++;
+      }
+      const legacy = matchVotes.filter((v) => !v.teamCategory);
+      if (legacy.length > 0) {
+        const tally: Record<string, number> = {};
+        legacy.forEach((v) => { tally[v.nomineeId] = (tally[v.nomineeId] ?? 0) + 1; });
+        const max = Math.max(0, ...Object.values(tally));
+        if (max > 0 && tally[player.id] === max) motmWins++;
+      }
     }
 
     // W/D/L
