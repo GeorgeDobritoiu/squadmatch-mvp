@@ -1,4 +1,6 @@
+import '../global.css';
 import { useEffect } from 'react';
+import { View, ActivityIndicator } from 'react-native';
 import { Stack, useRouter, useSegments } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
@@ -34,6 +36,15 @@ function AuthGate() {
     }
   }, [session, loading, segments]);
 
+  // Block render until session is known — prevents flash of wrong screen
+  if (loading) {
+    return (
+      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#fff' }}>
+        <ActivityIndicator size="large" color="#22C55E" />
+      </View>
+    );
+  }
+
   return null;
 }
 
@@ -58,6 +69,7 @@ export default function RootLayout() {
         <Stack.Screen name="create-team"  options={{ headerShown: false }} />
         <Stack.Screen name="create-group" options={{ headerShown: false }} />
         <Stack.Screen name="group-invite" options={{ headerShown: false }} />
+        <Stack.Screen name="pricing"      options={{ headerShown: false }} />
         <Stack.Screen name="+not-found"   />
       </Stack>
       <StatusBar style="dark" />

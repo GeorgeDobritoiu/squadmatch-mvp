@@ -208,6 +208,17 @@ export default function ProfileScreen() {
           )}
         </View>
 
+        {/* Upgrade banner */}
+        <TouchableOpacity style={styles.upgradeBanner} onPress={() => router.push('/pricing')} activeOpacity={0.88}>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.upgradeTitle}>Upgrade to PRO 🏆</Text>
+            <Text style={styles.upgradeSub}>Balanced teams · Stats · Reminders</Text>
+          </View>
+          <View style={styles.upgradeChip}>
+            <Text style={styles.upgradeChipText}>From £6.39/mo</Text>
+          </View>
+        </TouchableOpacity>
+
         {/* Settings */}
         <View style={styles.sectionCard}>
           <Text style={styles.sectionTitle}>Settings</Text>
@@ -286,6 +297,16 @@ const styles = StyleSheet.create({
   statLabel: { ...typography.tiny, color: colors.textSecondary, marginTop: 2 },
   statDivider: { width: 1, backgroundColor: colors.border },
 
+  upgradeBanner: {
+    flexDirection: 'row', alignItems: 'center',
+    backgroundColor: colors.primary, borderRadius: borderRadius.xl,
+    padding: spacing.md, marginBottom: spacing.md,
+    ...shadows.md,
+  },
+  upgradeTitle: { ...typography.bodyBold, color: colors.white, marginBottom: 2 },
+  upgradeSub:   { ...typography.small, color: 'rgba(255,255,255,0.7)' },
+  upgradeChip:  { backgroundColor: colors.accent, borderRadius: borderRadius.full, paddingHorizontal: 12, paddingVertical: 6 },
+  upgradeChipText: { ...typography.smallBold, color: colors.white },
   sectionCard: { backgroundColor: colors.white, borderRadius: borderRadius.xl, padding: spacing.lg, marginBottom: spacing.md, ...shadows.sm },
   sectionTitle: { ...typography.captionBold, color: colors.text, textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: spacing.md },
   fieldRow: { marginBottom: spacing.md },
