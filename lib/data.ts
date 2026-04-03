@@ -1,235 +1,330 @@
-import { blink } from './blink';
+import { supabase } from './supabase';
 import { computeRating, snakeDraft } from './ratings';
 
 // ── Players ──────────────────────────────────────────────────────────────────
 
 export async function getPlayers() {
-  const result = await blink.db.players.list({ orderBy: { name: 'asc' } });
-  return result ?? [];
+  const { data, error } = await supabase
+    .from('players')
+    .select('*')
+    .order('name', { ascending: true });
+  if (error) throw error;
+  return data ?? [];
+}
+
+export async function getPlayerById(id: string) {
+  const { data, error } = await supabase
+    .from('players')
+    .select('*')
+    .eq('id', id)
+    .single();
+  if (error) throw error;
+  return data;
 }
 
 export async function getCurrentUser() {
-  const players = await blink.db.players.list({ where: { isCurrentUser: 1 } });
-  return players?.[0] ?? null;
-}
-
-export async function loginAsPlayer(playerId: string) {
-  // Clear previous current user
-  const existing = await blink.db.players.list({ where: { isCurrentUser: 1 } });
-  for (const p of existing ?? []) {
-    await blink.db.players.update(p.id, { isCurrentUser: 0 });
-  }
-  return blink.db.players.update(playerId, { isCurrentUser: 1 });
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return null;
+  const { data, error } = await supabase
+    .from('players')
+    .select('*')
+    .eq('user_id', user.id)
+    .single();
+  if (error) return null;
+  return data;
 }
 
 export interface CreatePlayerInput {
-  name: string;
-  position: string;
+  name:       string;
+  position:   string;
   skillLevel: string;
 }
 
 export async function createPlayer(input: CreatePlayerInput) {
-  // Clear any previous "current user" flag first
-  const existing = await blink.db.players.list({ where: { isCurrentUser: 1 } });
-  for (const p of existing ?? []) {
-    await blink.db.players.update(p.id, { isCurrentUser: 0 });
-  }
+  const { data: { user } } = await supabase.auth.getUser();
   const id = `p_${Date.now()}`;
-  return blink.db.players.create({
+  const { data, error } = await supabase.from('players').insert({
     id,
-    name: input.name.trim(),
-    position: input.position,
-    skillLevel: input.skillLevel,
-    role: 'player',
-    isCurrentUser: 1,
-  });
+    user_id:    user?.id ?? null,
+    name:       input.name.trim(),
+    position:   input.position,
+    skill_level: input.skillLevel,
+    role:       'player',
+  }).select().single();
+  if (error) throw error;
+  return data;
 }
 
 // ── Group ────────────────────────────────────────────────────────────────────
 
 export async function getGroup() {
-  const groups = await blink.db.groupsTable.list({ limit: 1 });
-  return groups?.[0] ?? null;
+  const { data, error } = await supabase
+    .from('groups')
+    .select('*')
+    .limit(1)
+    .single();
+  if (error) return null;
+  return data;
 }
 
 export interface CreateGroupInput {
-  name: string;
-  sport: string;
-  format?: string;
-  frequency?: string;
-  location?: string;
+  name:        string;
+  sport:       string;
+  format?:     string;
+  frequency?:  string;
+  location?:   string;
   description?: string;
-  memberIds?: string[];
+  memberIds?:  string[];
 }
 
 export async function createGroup(input: CreateGroupInput) {
   const id = `grp_${Date.now()}`;
-  // Build a rich description that includes sport/format metadata
-  const meta = [
-    input.sport,
-    input.format,
-    input.frequency,
-  ].filter(Boolean).join(' · ');
-
-  const group = await blink.db.groupsTable.create({
+  const meta = [input.sport, input.format, input.frequency]
+    .filter(Boolean)
+    .join(' · ');
+  const { data, error } = await supabase.from('groups').insert({
     id,
-    name: input.name,
-    location: input.location ?? '',
-    description: input.description
-      ? `${input.description}\n\n${meta}`
-      : meta,
-  });
-
-  // If memberIds provided, we don't need to do anything special since
-  // they're already in the players table — the group shares all players.
-  // In a multi-team future you'd create a join table; for now this is MVP.
-  return group;
+    name:        input.name,
+    location:    input.location ?? '',
+    description: input.description ? `${input.description}\n\n${meta}` : meta,
+  }).select().single();
+  if (error) throw error;
+  return data;
 }
 
 // ── Matches ──────────────────────────────────────────────────────────────────
 
 export async function getMatches() {
-  const result = await blink.db.matches.list({ orderBy: { date: 'desc' } });
-  return result ?? [];
+  const { data, error } = await supabase
+    .from('matches')
+    .select('*')
+    .order('date', { ascending: false });
+  if (error) throw error;
+  return data ?? [];
 }
 
 export async function getNextMatch() {
-  const matches = await blink.db.matches.list({
-    where: { status: 'open' },
-    orderBy: { date: 'asc' },
-    limit: 1,
-  });
-  if (matches?.length) return matches[0];
-  const full = await blink.db.matches.list({
-    where: { status: 'full' },
-    orderBy: { date: 'asc' },
-    limit: 1,
-  });
+  const { data: open } = await supabase
+    .from('matches')
+    .select('*')
+    .eq('status', 'open')
+    .order('date', { ascending: true })
+    .limit(1);
+  if (open?.length) return open[0];
+
+  const { data: full } = await supabase
+    .from('matches')
+    .select('*')
+    .eq('status', 'full')
+    .order('date', { ascending: true })
+    .limit(1);
   return full?.[0] ?? null;
 }
 
 export async function getMatchById(id: string) {
-  return blink.db.matches.get(id);
+  const { data, error } = await supabase
+    .from('matches')
+    .select('*')
+    .eq('id', id)
+    .single();
+  if (error) throw error;
+  return data;
 }
 
 // ── Attendance ───────────────────────────────────────────────────────────────
 
 export async function getAttendance(matchId: string) {
-  return blink.db.attendance.list({ where: { matchId } });
+  const { data, error } = await supabase
+    .from('attendance')
+    .select('*')
+    .eq('match_id', matchId);
+  if (error) throw error;
+  return data ?? [];
 }
 
 export async function upsertAttendance(matchId: string, playerId: string, status: string) {
-  const existing = await blink.db.attendance.list({ where: { matchId, playerId } });
-  if (existing?.length) {
-    return blink.db.attendance.update(existing[0].id, { status });
+  const { data: existing } = await supabase
+    .from('attendance')
+    .select('id')
+    .eq('match_id', matchId)
+    .eq('player_id', playerId)
+    .single();
+
+  if (existing) {
+    const { data, error } = await supabase
+      .from('attendance')
+      .update({ status })
+      .eq('id', existing.id)
+      .select()
+      .single();
+    if (error) throw error;
+    return data;
   }
-  return blink.db.attendance.create({
-    id: `att_${Date.now()}`,
-    matchId,
-    playerId,
+
+  const { data, error } = await supabase.from('attendance').insert({
+    id:        `att_${Date.now()}`,
+    match_id:  matchId,
+    player_id: playerId,
     status,
-  });
+  }).select().single();
+  if (error) throw error;
+  return data;
 }
 
 // ── Guests ───────────────────────────────────────────────────────────────────
 
 export async function getGuests(matchId: string) {
-  return blink.db.guests.list({ where: { matchId } });
+  const { data, error } = await supabase
+    .from('guests')
+    .select('*')
+    .eq('match_id', matchId);
+  if (error) throw error;
+  return data ?? [];
 }
 
 export async function addGuest(guest: {
-  matchId: string;
-  sponsorId: string;
-  name: string;
-  type: string;
-  skillLevel: string;
+  matchId:                 string;
+  sponsorId:               string;
+  name:                    string;
+  type:                    string;
+  skillLevel:              string;
   requiresSponsorPresence: boolean;
 }) {
-  return blink.db.guests.create({
-    id: `guest_${Date.now()}`,
-    matchId: guest.matchId,
-    sponsorId: guest.sponsorId,
-    name: guest.name,
-    type: guest.type,
-    skillLevel: guest.skillLevel,
-    requiresSponsorPresence: guest.requiresSponsorPresence ? 1 : 0,
-  });
+  const { data, error } = await supabase.from('guests').insert({
+    id:                       `guest_${Date.now()}`,
+    match_id:                 guest.matchId,
+    sponsor_id:               guest.sponsorId,
+    name:                     guest.name,
+    type:                     guest.type,
+    skill_level:              guest.skillLevel,
+    requires_sponsor_presence: guest.requiresSponsorPresence,
+  }).select().single();
+  if (error) throw error;
+  return data;
 }
 
 // ── Payments ─────────────────────────────────────────────────────────────────
 
 export async function getPayments(matchId: string) {
-  return blink.db.payments.list({ where: { matchId } });
+  const { data, error } = await supabase
+    .from('payments')
+    .select('*')
+    .eq('match_id', matchId);
+  if (error) throw error;
+  return data ?? [];
 }
 
 export async function getAllPayments() {
-  return blink.db.payments.list({ orderBy: { createdAt: 'desc' } });
+  const { data, error } = await supabase
+    .from('payments')
+    .select('*')
+    .order('created_at', { ascending: false });
+  if (error) throw error;
+  return data ?? [];
 }
 
 export async function markPayment(paymentId: string, status: string, method?: string) {
-  return blink.db.payments.update(paymentId, { status, ...(method ? { method } : {}) });
+  const { data, error } = await supabase
+    .from('payments')
+    .update({ status, ...(method ? { method } : {}) })
+    .eq('id', paymentId)
+    .select()
+    .single();
+  if (error) throw error;
+  return data;
 }
 
 // ── MOTM Votes ───────────────────────────────────────────────────────────────
 
-export async function getPlayerById(id: string) {
-  return blink.db.players.get(id);
+export async function getMotmVotes(matchId: string) {
+  const { data, error } = await supabase
+    .from('motm_votes')
+    .select('*')
+    .eq('match_id', matchId);
+  if (error) throw error;
+  return data ?? [];
+}
+
+export async function castMotmVote(
+  matchId:   string,
+  voterId:   string,
+  nomineeId: string,
+  team:      'A' | 'B',
+) {
+  const { data: existing } = await supabase
+    .from('motm_votes')
+    .select('id')
+    .eq('match_id', matchId)
+    .eq('voter_id', voterId)
+    .eq('team', team)
+    .single();
+
+  if (existing) {
+    const { data, error } = await supabase
+      .from('motm_votes')
+      .update({ nominee_id: nomineeId })
+      .eq('id', existing.id)
+      .select()
+      .single();
+    if (error) throw error;
+    return data;
+  }
+
+  const { data, error } = await supabase.from('motm_votes').insert({
+    id:          `vote_${team}_${Date.now()}`,
+    match_id:    matchId,
+    voter_id:    voterId,
+    nominee_id:  nomineeId,
+    team,
+  }).select().single();
+  if (error) throw error;
+  return data;
 }
 
 // ── Per-Player Stats ──────────────────────────────────────────────────────────
 
 export async function getPlayerStats(playerId: string) {
-  // All attendance records for this player
-  const allAttendance = await blink.db.attendance.list({ where: { playerId } });
+  const { data: allAttendance } = await supabase
+    .from('attendance')
+    .select('*')
+    .eq('player_id', playerId);
   const attended = (allAttendance ?? []).filter((a) => a.status === 'yes');
+  const playedMatchIds = attended.map((a) => a.match_id);
 
-  // Match IDs where they played
-  const playedMatchIds = attended.map((a) => a.matchId);
-
-  // All past matches to figure out attendance rate
-  const allMatches = await blink.db.matches.list({ orderBy: { date: 'desc' } });
+  const { data: allMatches } = await supabase
+    .from('matches')
+    .select('*')
+    .order('date', { ascending: false });
   const closedMatches = (allMatches ?? []).filter((m) => m.status === 'closed');
   const matchesPlayed = closedMatches.filter((m) => playedMatchIds.includes(m.id));
 
-  // MOTM wins — count wins per team category (A and B separately)
-  const allVotes = await blink.db.motmVotes.list({});
+  const { data: allVotes } = await supabase.from('motm_votes').select('*');
   let motmWins = 0;
   for (const match of closedMatches) {
-    const matchVotes = (allVotes ?? []).filter((v) => v.matchId === match.id);
-    // Per-category voting (new format)
+    const matchVotes = (allVotes ?? []).filter((v) => v.match_id === match.id);
     for (const cat of ['A', 'B'] as const) {
       const catVotes = matchVotes.filter((v) => v.team === cat);
       if (catVotes.length === 0) continue;
       const tally: Record<string, number> = {};
-      catVotes.forEach((v) => { tally[v.nomineeId] = (tally[v.nomineeId] ?? 0) + 1; });
-      const max = Math.max(0, ...Object.values(tally));
-      if (max > 0 && tally[playerId] === max) motmWins++;
-    }
-    // Legacy votes without teamCategory — treat as one overall vote
-    const legacyVotes = matchVotes.filter((v) => !v.team);
-    if (legacyVotes.length > 0) {
-      const tally: Record<string, number> = {};
-      legacyVotes.forEach((v) => { tally[v.nomineeId] = (tally[v.nomineeId] ?? 0) + 1; });
+      catVotes.forEach((v) => { tally[v.nominee_id] = (tally[v.nominee_id] ?? 0) + 1; });
       const max = Math.max(0, ...Object.values(tally));
       if (max > 0 && tally[playerId] === max) motmWins++;
     }
   }
 
-  // Attendance rate (% of closed matches they attended)
   const attendanceRate =
     closedMatches.length > 0
       ? Math.round((matchesPlayed.length / closedMatches.length) * 100)
       : 0;
 
-  // Team record (W/D/L) in played matches
   let wins = 0, draws = 0, losses = 0;
   for (const match of matchesPlayed) {
-    if (match.scoreA === null || match.scoreB === null) continue;
-    const attRec = attended.find((a) => a.matchId === match.id);
+    if (match.score_a === null || match.score_b === null) continue;
+    const attRec = attended.find((a) => a.match_id === match.id);
     const team = attRec?.team;
     if (!team) continue;
-    const myScore = team === 'A' ? match.scoreA : match.scoreB;
-    const oppScore = team === 'A' ? match.scoreB : match.scoreA;
+    const myScore  = team === 'A' ? match.score_a : match.score_b;
+    const oppScore = team === 'A' ? match.score_b : match.score_a;
     if (myScore > oppScore) wins++;
     else if (myScore === oppScore) draws++;
     else losses++;
@@ -243,92 +338,60 @@ export async function getPlayerStats(playerId: string) {
     draws,
     losses,
     recentMatches: matchesPlayed.slice(0, 5).map((m) => {
-      const attRec = attended.find((a) => a.matchId === m.id);
+      const attRec = attended.find((a) => a.match_id === m.id);
       return { ...m, myTeam: attRec?.team ?? null };
     }),
   };
 }
 
-export async function getMotmVotes(matchId: string) {
-  return blink.db.motmVotes.list({ where: { matchId } });
-}
-
-export async function castMotmVote(
-  matchId: string,
-  voterId: string,
-  nomineeId: string,
-  team: 'A' | 'B',
-) {
-  // Each voter gets one vote per team.
-  // Fetch all votes for this voter in this match, filter by team client-side.
-  const allExisting = await blink.db.motmVotes.list({
-    where: { matchId, voterId },
-  });
-  const existing = (allExisting ?? []).filter((v) => v.team === team);
-  if (existing.length) {
-    return blink.db.motmVotes.update(existing[0].id, { nomineeId });
-  }
-  return blink.db.motmVotes.create({
-    id: `vote_${team}_${Date.now()}`,
-    matchId,
-    voterId,
-    nomineeId,
-    team,
-  });
-}
-
 // ── Batch player ratings (4 queries for all players) ─────────────────────────
 
 export async function getAllPlayerRatings(): Promise<Record<string, number>> {
-  const [players, allAttendance, allMatches, allVotes] = await Promise.all([
-    blink.db.players.list({}),
-    blink.db.attendance.list({}),
-    blink.db.matches.list({ where: { status: 'closed' } }),
-    blink.db.motmVotes.list({}),
+  const [
+    { data: players },
+    { data: allAttendance },
+    { data: allMatches },
+    { data: allVotes },
+  ] = await Promise.all([
+    supabase.from('players').select('*'),
+    supabase.from('attendance').select('*'),
+    supabase.from('matches').select('*').eq('status', 'closed'),
+    supabase.from('motm_votes').select('*'),
   ]);
 
   const ratings: Record<string, number> = {};
 
   for (const player of players ?? []) {
     const attended = (allAttendance ?? []).filter(
-      (a) => a.playerId === player.id && a.status === 'yes',
+      (a) => a.player_id === player.id && a.status === 'yes',
     );
-    const playedMatchIds = attended.map((a) => a.matchId);
+    const playedMatchIds = attended.map((a) => a.match_id);
     const matchesPlayed  = (allMatches ?? []).filter((m) =>
       playedMatchIds.includes(m.id),
     );
 
-    // MOTM wins — per team category (new) + legacy fallback
     let motmWins = 0;
     for (const match of allMatches ?? []) {
-      const matchVotes = (allVotes ?? []).filter((v) => v.matchId === match.id);
+      const matchVotes = (allVotes ?? []).filter((v) => v.match_id === match.id);
       for (const cat of ['A', 'B'] as const) {
         const catVotes = matchVotes.filter((v) => v.team === cat);
         if (catVotes.length === 0) continue;
         const tally: Record<string, number> = {};
-        catVotes.forEach((v) => { tally[v.nomineeId] = (tally[v.nomineeId] ?? 0) + 1; });
-        const max = Math.max(0, ...Object.values(tally));
-        if (max > 0 && tally[player.id] === max) motmWins++;
-      }
-      const legacy = matchVotes.filter((v) => !v.team);
-      if (legacy.length > 0) {
-        const tally: Record<string, number> = {};
-        legacy.forEach((v) => { tally[v.nomineeId] = (tally[v.nomineeId] ?? 0) + 1; });
+        catVotes.forEach((v) => { tally[v.nominee_id] = (tally[v.nominee_id] ?? 0) + 1; });
         const max = Math.max(0, ...Object.values(tally));
         if (max > 0 && tally[player.id] === max) motmWins++;
       }
     }
 
-    // W/D/L
     let wins = 0, totalGames = 0;
     for (const match of matchesPlayed) {
-      if (match.scoreA === null || match.scoreB === null) continue;
-      const rec  = attended.find((a) => a.matchId === match.id);
+      if (match.score_a === null || match.score_b === null) continue;
+      const rec  = attended.find((a) => a.match_id === match.id);
       const team = rec?.team;
       if (!team) continue;
       totalGames++;
-      const mine = team === 'A' ? match.scoreA : match.scoreB;
-      const opp  = team === 'A' ? match.scoreB : match.scoreA;
+      const mine = team === 'A' ? match.score_a : match.score_b;
+      const opp  = team === 'A' ? match.score_b : match.score_a;
       if (mine > opp) wins++;
     }
 
@@ -337,7 +400,7 @@ export async function getAllPlayerRatings(): Promise<Record<string, number>> {
       : 0;
 
     ratings[player.id] = computeRating({
-      skillLevel: player.skillLevel,
+      skillLevel:    player.skill_level,
       motmWins,
       attendanceRate,
       wins,
@@ -351,67 +414,83 @@ export async function getAllPlayerRatings(): Promise<Record<string, number>> {
 // ── Team Generation (snake-draft by rating) ───────────────────────────────────
 
 export async function generateTeams(matchId: string) {
-  const [attendance, guests, ratings] = await Promise.all([
-    blink.db.attendance.list({ where: { matchId, status: 'yes' } }),
-    blink.db.guests.list({ where: { matchId } }),
+  const [
+    { data: attendance },
+    { data: guests },
+    ratings,
+  ] = await Promise.all([
+    supabase.from('attendance').select('*').eq('match_id', matchId).eq('status', 'yes'),
+    supabase.from('guests').select('*').eq('match_id', matchId),
     getAllPlayerRatings(),
   ]);
 
-  // Sort attending players by rating descending, then snake-draft
-  const playerIds = (attendance ?? []).map((a) => a.playerId);
+  const playerIds = (attendance ?? []).map((a) => a.player_id);
   const sorted    = [...playerIds].sort((a, b) => (ratings[b] ?? 3) - (ratings[a] ?? 3));
   const { teamA, teamB } = snakeDraft(sorted);
 
   for (const id of teamA) {
-    const rec = (attendance ?? []).find((a) => a.playerId === id);
-    if (rec) await blink.db.attendance.update(rec.id, { team: 'A' });
+    const rec = (attendance ?? []).find((a) => a.player_id === id);
+    if (rec) await supabase.from('attendance').update({ team: 'A' }).eq('id', rec.id);
   }
   for (const id of teamB) {
-    const rec = (attendance ?? []).find((a) => a.playerId === id);
-    if (rec) await blink.db.attendance.update(rec.id, { team: 'B' });
+    const rec = (attendance ?? []).find((a) => a.player_id === id);
+    if (rec) await supabase.from('attendance').update({ team: 'B' }).eq('id', rec.id);
   }
 
-  // Distribute guests evenly across teams (A, B, A, B, …)
   const guestList = guests ?? [];
   for (let i = 0; i < guestList.length; i++) {
-    await blink.db.guests.update(guestList[i].id, { team: i % 2 === 0 ? 'A' : 'B' });
+    await supabase
+      .from('guests')
+      .update({ team: i % 2 === 0 ? 'A' : 'B' })
+      .eq('id', guestList[i].id);
   }
 }
 
 // ── Match Scheduling ─────────────────────────────────────────────────────────
 
 export interface CreateMatchInput {
-  groupId: string;
-  date: string;        // YYYY-MM-DD
-  time: string;        // HH:MM
-  location: string;
+  groupId:       string;
+  date:          string;  // YYYY-MM-DD
+  time:          string;  // HH:MM
+  location:      string;
   costPerPlayer: number;
-  notes?: string;
-  pitchName?: string;
+  notes?:        string;
+  pitchName?:    string;
 }
 
 export async function createMatch(input: CreateMatchInput) {
-  const id = `m_${Date.now()}`;
-  return blink.db.matches.create({
-    id,
-    groupId: input.groupId,
-    date: input.date,
-    time: input.time,
-    location: input.location,
-    costPerPlayer: input.costPerPlayer,
-    status: 'open',
-    teamsLocked: 0,
-  });
+  const { data, error } = await supabase.from('matches').insert({
+    id:              `m_${Date.now()}`,
+    group_id:        input.groupId,
+    date:            input.date,
+    time:            input.time,
+    location:        input.location,
+    cost_per_player: input.costPerPlayer,
+    status:          'open',
+    teams_locked:    false,
+  }).select().single();
+  if (error) throw error;
+  return data;
 }
 
 export async function lockTeams(matchId: string) {
-  return blink.db.matches.update(matchId, { teamsLocked: 1 });
+  const { data, error } = await supabase
+    .from('matches')
+    .update({ teams_locked: true })
+    .eq('id', matchId)
+    .select()
+    .single();
+  if (error) throw error;
+  return data;
 }
 
 export async function submitScore(matchId: string, scoreA: number, scoreB: number) {
-  return blink.db.matches.update(matchId, {
-    scoreA,
-    scoreB,
-    status: 'closed',
-  });
+  const { data, error } = await supabase
+    .from('matches')
+    .update({ score_a: scoreA, score_b: scoreB, status: 'closed' })
+    .eq('id', matchId)
+    .select()
+    .single();
+  if (error) throw error;
+  return data;
 }

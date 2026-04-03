@@ -1,0 +1,14 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npm --version)",
+      "Bash(bun --version)",
+      "Bash(npm install:*)",
+      "Bash(npx expo:*)",
+      "Bash(echo \"PID: $!\")",
+      "Read(//c/Users/georg/AppData/Local/Temp/claude/c--Users-georg-OneDrive-Documente-Robicon-Digital-Squadplay-app-squadmatch-mvp-main/74fe31a4-a57e-455b-83e2-f4e31f0aa026/tasks/**)",
+      "Bash(python3 -c \"import sys,json; d=json.load\\(sys.stdin\\); print\\(json.dumps\\({k:v for k,v in d.get\\('dependencies',{}\\).items\\(\\)}, indent=2\\)\\)\")",
+      "Bash(npm uninstall:*)"
+    ]
+  }
+}

@@ -15,6 +15,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useRouter } from 'expo-router';
 import { colors, spacing, borderRadius, typography, shadows } from '@/constants/design';
 import { getCurrentUser, getMatches, getPlayerStats } from '@/lib/data';
+import { signOut } from '@/lib/auth';
 
 const POSITIONS = ['Goalkeeper', 'Defender', 'Midfielder', 'Striker', 'Any'];
 const SKILL_LEVELS = ['Low', 'Medium', 'High'];
@@ -31,9 +32,10 @@ export default function ProfileScreen() {
   const router = useRouter();
   const queryClient = useQueryClient();
 
-  const doSignOut = () => {
+  const doSignOut = async () => {
     queryClient.clear();
-    router.replace('/welcome');
+    await signOut();
+    router.replace('/(auth)/login');
   };
 
   const handleSignOut = () => {
