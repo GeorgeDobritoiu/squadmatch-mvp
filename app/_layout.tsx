@@ -70,6 +70,7 @@ export default function RootLayout() {
         <Stack.Screen name="create-group" options={{ headerShown: false }} />
         <Stack.Screen name="group-invite" options={{ headerShown: false }} />
         <Stack.Screen name="pricing"      options={{ headerShown: false }} />
+        <Stack.Screen name="rate/[id]"    options={{ headerShown: false }} />
         <Stack.Screen name="+not-found"   />
       </Stack>
       <StatusBar style="dark" />

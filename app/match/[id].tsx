@@ -423,6 +423,13 @@ export default function MatchDetailScreen() {
               <Ionicons name="trophy-outline" size={18} color="#D97706" />
               <Text style={styles.motmBtnText}>MOTM Voting</Text>
             </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.rateBtn}
+              onPress={() => router.push(`/rate/${match.id}`)}
+            >
+              <Ionicons name="star-outline" size={18} color="#7C3AED" />
+              <Text style={styles.rateBtnText}>Rate Players</Text>
+            </TouchableOpacity>
           </View>
         )}
 
@@ -555,6 +562,8 @@ const styles = StyleSheet.create({
   submitScoreBtnText: { ...typography.captionBold, color: colors.white },
   motmBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: spacing.sm, paddingVertical: spacing.md, borderRadius: borderRadius.lg, backgroundColor: '#FEF3C7', borderWidth: 1.5, borderColor: '#FDE68A' },
   motmBtnText: { ...typography.captionBold, color: '#D97706' },
+  rateBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: spacing.sm, paddingVertical: spacing.md, borderRadius: borderRadius.lg, backgroundColor: '#F5F3FF', borderWidth: 1.5, borderColor: '#DDD6FE' },
+  rateBtnText: { ...typography.captionBold, color: '#7C3AED' },
 
   modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' },
   modalSheet: { backgroundColor: colors.white, borderTopLeftRadius: borderRadius.xxl, borderTopRightRadius: borderRadius.xxl, padding: spacing.lg, paddingBottom: 40 },
