@@ -113,7 +113,7 @@ export default function MatchDetailScreen() {
 
   const yesAttendance = (attendance ?? []).filter((a) => a.status === 'yes');
   const maybeAttendance = (attendance ?? []).filter((a) => a.status === 'maybe');
-  const myAttendance = (attendance ?? []).find((a) => a.playerId === currentUser?.id);
+  const myAttendance = (attendance ?? []).find((a) => a.player_id === currentUser?.id);
 
   const formatDate = (date: string) => {
     const d = new Date(date + 'T12:00:00');
@@ -385,28 +385,36 @@ export default function MatchDetailScreen() {
           </View>
         )}
 
-        {/* Post-Match */}
-        {isAdmin && match.status === 'closed' && (
+        {/* Post-Match — closed match actions */}
+        {match.status === 'closed' && (
           <View style={styles.section}>
-            <View style={styles.postMatchRow}>
+            <TouchableOpacity
+              style={styles.rateBtn}
+              onPress={() => router.push(`/rate/${match.id}`)}
+            >
+              <Ionicons name="star-outline" size={18} color="#7C3AED" />
+              <Text style={styles.rateBtnText}>Rate Players</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.motmBtn, { marginTop: spacing.sm }]}
+              onPress={() => router.push(`/motm/${match.id}`)}
+            >
+              <Ionicons name="trophy-outline" size={18} color="#D97706" />
+              <Text style={styles.motmBtnText}>MOTM Voting</Text>
+            </TouchableOpacity>
+            {isAdmin && (
               <TouchableOpacity
-                style={styles.postMatchBtn}
-                onPress={() => router.push(`/motm/${match.id}`)}
-              >
-                <Ionicons name="trophy-outline" size={18} color="#D97706" />
-                <Text style={styles.postMatchBtnText}>MOTM Voting</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[styles.postMatchBtn, styles.postMatchBtnPrimary]}
+                style={[styles.submitScoreBtn, { marginTop: spacing.sm }]}
                 onPress={() => setScoreModalVisible(true)}
               >
                 <Ionicons name="create-outline" size={18} color={colors.white} />
-                <Text style={[styles.postMatchBtnText, { color: colors.white }]}>Edit Score</Text>
+                <Text style={styles.submitScoreBtnText}>Edit Score</Text>
               </TouchableOpacity>
-            </View>
+            )}
           </View>
         )}
 
+        {/* Pre-match admin controls */}
         {isAdmin && match.status !== 'closed' && (
           <View style={styles.section}>
             <TouchableOpacity
@@ -417,18 +425,11 @@ export default function MatchDetailScreen() {
               <Text style={styles.submitScoreBtnText}>Submit Final Score</Text>
             </TouchableOpacity>
             <TouchableOpacity
-              style={styles.motmBtn}
+              style={[styles.motmBtn, { marginTop: spacing.sm }]}
               onPress={() => router.push(`/motm/${match.id}`)}
             >
               <Ionicons name="trophy-outline" size={18} color="#D97706" />
               <Text style={styles.motmBtnText}>MOTM Voting</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={styles.rateBtn}
-              onPress={() => router.push(`/rate/${match.id}`)}
-            >
-              <Ionicons name="star-outline" size={18} color="#7C3AED" />
-              <Text style={styles.rateBtnText}>Rate Players</Text>
             </TouchableOpacity>
           </View>
         )}
