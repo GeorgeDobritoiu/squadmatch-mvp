@@ -115,23 +115,31 @@ export default function HomeScreen() {
   const router        = useRouter();
   const queryClient   = useQueryClient();
   const [guestModal, setGuestModal] = useState(false);
+  const [squadDropdown, setSquadDropdown] = useState(false);
+  const [activeGroupId, setActiveGroupId] = useState<string | null>(null);
 
   // ── Data ──────────────────────────────────────────────────────────────────
 
   const { data: currentUser } = useQuery({ queryKey: ['currentUser'], queryFn: getCurrentUser });
 
-  // Get all groups this user belongs to, then pick the first one
+  // Get all groups this user belongs to
   const { data: userGroups } = useQuery({
     queryKey: ['userGroups', currentUser?.id],
     queryFn:  () => getUserGroups(currentUser!.id),
     enabled:  !!currentUser?.id,
-  });
-  const firstGroupId = userGroups?.[0]?.id ?? null;
+    onSuccess: (groups: any[]) => {
+      if (groups.length > 0 && !activeGroupId) {
+        setActiveGroupId(groups[0].id);
+      }
+    },
+  } as any);
+
+  const resolvedGroupId = activeGroupId ?? userGroups?.[0]?.id ?? null;
 
   const { data: group } = useQuery({
-    queryKey: ['group', firstGroupId],
-    queryFn:  () => getGroup(firstGroupId ?? undefined),
-    enabled:  firstGroupId !== null || userGroups !== undefined,
+    queryKey: ['group', resolvedGroupId],
+    queryFn:  () => getGroup(resolvedGroupId ?? undefined),
+    enabled:  resolvedGroupId !== null || userGroups !== undefined,
   });
   const { data: players }      = useQuery({ queryKey: ['players'],     queryFn: getPlayers });
 
@@ -233,28 +241,63 @@ export default function HomeScreen() {
         {/* ── HEADER ── */}
         <View style={s.header}>
           {/* Squad switcher */}
-          <TouchableOpacity style={s.squadSwitcher} activeOpacity={0.75}>
-            <View style={s.squadLogo}>
-              <Text style={s.squadLogoText}>{squadInitial}</Text>
-            </View>
-            <View style={s.squadInfo}>
-              <Text style={s.squadName} numberOfLines={1}>{group?.name ?? 'My Squad'}</Text>
-              <View style={s.rolePlanRow}>
-                <View style={[s.roleBadge, isAdmin && s.roleBadgeAdmin]}>
-                  <Text style={[s.roleBadgeText, isAdmin && s.roleBadgeTextAdmin]}>
-                    {isAdmin ? 'Admin' : 'Player'}
-                  </Text>
-                </View>
-                <Text style={s.roleSep}>·</Text>
-                <View style={[s.planBadge, isPremium && s.planBadgePremium]}>
-                  <Text style={[s.planBadgeText, isPremium && s.planBadgeTextPremium]}>
-                    {isPremium ? '⭐ Premium' : 'Free'}
-                  </Text>
+          <View style={{ flex: 1 }}>
+            <TouchableOpacity
+              style={s.squadSwitcher}
+              activeOpacity={0.75}
+              onPress={() => (userGroups?.length ?? 0) > 1 && setSquadDropdown(!squadDropdown)}
+            >
+              <View style={s.squadLogo}>
+                <Text style={s.squadLogoText}>{squadInitial}</Text>
+              </View>
+              <View style={s.squadInfo}>
+                <Text style={s.squadName} numberOfLines={1}>{group?.name ?? 'My Squad'}</Text>
+                <View style={s.rolePlanRow}>
+                  <View style={[s.roleBadge, isAdmin && s.roleBadgeAdmin]}>
+                    <Text style={[s.roleBadgeText, isAdmin && s.roleBadgeTextAdmin]}>
+                      {isAdmin ? 'Admin' : 'Player'}
+                    </Text>
+                  </View>
+                  <Text style={s.roleSep}>·</Text>
+                  <View style={[s.planBadge, isPremium && s.planBadgePremium]}>
+                    <Text style={[s.planBadgeText, isPremium && s.planBadgeTextPremium]}>
+                      {isPremium ? '⭐ Premium' : 'Free'}
+                    </Text>
+                  </View>
                 </View>
               </View>
-            </View>
-            <Ionicons name="chevron-down" size={18} color={GREY_TEXT} />
-          </TouchableOpacity>
+              {(userGroups?.length ?? 0) > 1 && (
+                <Ionicons name={squadDropdown ? 'chevron-up' : 'chevron-down'} size={18} color={GREY_TEXT} />
+              )}
+            </TouchableOpacity>
+
+            {/* Dropdown */}
+            {squadDropdown && (userGroups?.length ?? 0) > 1 && (
+              <View style={s.squadDropdown}>
+                {(userGroups ?? []).map((g: any) => (
+                  <TouchableOpacity
+                    key={g.id}
+                    style={[s.squadDropdownItem, resolvedGroupId === g.id && s.squadDropdownItemActive]}
+                    onPress={() => { setActiveGroupId(g.id); setSquadDropdown(false); }}
+                    activeOpacity={0.8}
+                  >
+                    <View style={s.squadDropdownLogo}>
+                      <Text style={s.squadLogoText}>{g.name.charAt(0).toUpperCase()}</Text>
+                    </View>
+                    <View style={{ flex: 1 }}>
+                      <Text style={[s.squadDropdownName, resolvedGroupId === g.id && { color: NAVY, fontWeight: '700' }]}>
+                        {g.name}
+                      </Text>
+                      <Text style={s.squadDropdownRole}>{g.myRole}</Text>
+                    </View>
+                    {resolvedGroupId === g.id && (
+                      <Ionicons name="checkmark-circle" size={18} color={GREEN} />
+                    )}
+                  </TouchableOpacity>
+                ))}
+              </View>
+            )}
+          </View>
 
           {/* User avatar */}
           <TouchableOpacity onPress={() => router.push('/(tabs)/profile')}>
@@ -573,13 +616,30 @@ const s = StyleSheet.create({
     justifyContent: 'space-between', marginBottom: 6,
   },
   squadSwitcher: {
-    flex: 1, flexDirection: 'row', alignItems: 'center',
+    flexDirection: 'row', alignItems: 'center',
     backgroundColor: GREY_CARD, borderRadius: 18,
     borderWidth: 1, borderColor: GREY_BORDER,
     paddingHorizontal: 12, paddingVertical: 9,
     marginRight: 10,
     ...shadows.xs,
   } as any,
+  squadDropdown: {
+    backgroundColor: GREY_CARD, borderRadius: 16,
+    borderWidth: 1, borderColor: GREY_BORDER,
+    marginTop: 4, marginRight: 10,
+    overflow: 'hidden', ...shadows.sm,
+  } as any,
+  squadDropdownItem: {
+    flexDirection: 'row', alignItems: 'center',
+    paddingHorizontal: 12, paddingVertical: 10, gap: 10,
+  },
+  squadDropdownItemActive: { backgroundColor: '#F0FDF4' },
+  squadDropdownLogo: {
+    width: 30, height: 30, borderRadius: 15,
+    backgroundColor: NAVY, justifyContent: 'center', alignItems: 'center',
+  },
+  squadDropdownName: { fontSize: 14, fontWeight: '600', color: GREY_TEXT },
+  squadDropdownRole: { fontSize: 11, color: GREY_TEXT, textTransform: 'capitalize' },
   squadLogo: {
     width: 36, height: 36, borderRadius: 18,
     backgroundColor: NAVY, justifyContent: 'center', alignItems: 'center',
