@@ -14,7 +14,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useRouter } from 'expo-router';
 import { colors, spacing, borderRadius, typography, shadows } from '@/constants/design';
-import { getCurrentUser, getPlayerStats, getUserGroups } from '@/lib/data';
+import { getCurrentUser, getPlayerStats, getUserGroups, getGroup } from '@/lib/data';
 import { signOut } from '@/lib/auth';
 
 
@@ -57,11 +57,24 @@ export default function ProfileScreen() {
     enabled: !!currentUser?.id,
   });
 
-  const { data: userGroups } = useQuery({
+  const { data: userGroupsRaw } = useQuery({
     queryKey: ['userGroups', currentUser?.id],
     queryFn: () => getUserGroups(currentUser!.id),
     enabled: !!currentUser?.id,
   });
+
+  // Fallback: if no group_members rows found, show the group from getGroup()
+  const { data: fallbackGroup } = useQuery({
+    queryKey: ['group'],
+    queryFn: getGroup,
+    enabled: (userGroupsRaw?.length ?? 0) === 0,
+  });
+
+  const userGroups = (userGroupsRaw && userGroupsRaw.length > 0)
+    ? userGroupsRaw
+    : fallbackGroup
+      ? [{ ...fallbackGroup, myRole: currentUser?.role ?? 'player' }]
+      : [];
 
   if (isLoading) {
     return (
