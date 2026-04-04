@@ -9,6 +9,7 @@ import {
   Alert,
   TextInput,
   Modal,
+  Platform,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -115,10 +116,16 @@ export default function MatchDetailScreen() {
   });
 
   const handleRemoveGuest = (guestId: string, guestName: string) => {
-    Alert.alert('Remove Guest', `Remove ${guestName} from this match?`, [
-      { text: 'Cancel', style: 'cancel' },
-      { text: 'Remove', style: 'destructive', onPress: () => removeGuestMutation.mutate(guestId) },
-    ]);
+    if (Platform.OS === 'web') {
+      if (window.confirm(`Remove ${guestName} from this match?`)) {
+        removeGuestMutation.mutate(guestId);
+      }
+    } else {
+      Alert.alert('Remove Guest', `Remove ${guestName} from this match?`, [
+        { text: 'Cancel', style: 'cancel' },
+        { text: 'Remove', style: 'destructive', onPress: () => removeGuestMutation.mutate(guestId) },
+      ]);
+    }
   };
 
   const getPlayer = (playerId: string) => players?.find((p) => p.id === playerId);
