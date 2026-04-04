@@ -494,3 +494,119 @@ export async function submitScore(matchId: string, scoreA: number, scoreB: numbe
   if (error) throw error;
   return data;
 }
+
+// ── Group Membership & Ownership ─────────────────────────────────────────────
+
+export type GroupRole = 'owner' | 'admin' | 'player';
+
+export interface GroupMember {
+  memberId:    string;
+  role:        GroupRole;
+  joinedAt:    string;
+  player_id:   string;
+  id:          string;
+  name:        string;
+  position:    string;
+  skill_level: string;
+  user_id:     string | null;
+}
+
+export async function getGroupMembers(groupId: string): Promise<GroupMember[]> {
+  const { data: members, error } = await supabase
+    .from('group_members')
+    .select('*')
+    .eq('group_id', groupId);
+  if (error) throw error;
+  if (!members?.length) return [];
+
+  const playerIds = members.map((m) => m.player_id);
+  const { data: players } = await supabase
+    .from('players')
+    .select('*')
+    .in('id', playerIds);
+
+  return members.map((m) => {
+    const player = (players ?? []).find((p) => p.id === m.player_id);
+    return {
+      memberId:    m.id,
+      role:        (m.role ?? 'player') as GroupRole,
+      joinedAt:    m.joined_at,
+      player_id:   m.player_id,
+      id:          player?.id          ?? m.player_id,
+      name:        player?.name        ?? 'Unknown',
+      position:    player?.position    ?? '',
+      skill_level: player?.skill_level ?? 'intermediate',
+      user_id:     player?.user_id     ?? null,
+    };
+  });
+}
+
+// Transfer ownership — calls the atomic Postgres function
+export async function transferOwnership(
+  groupId:             string,
+  newOwnerPlayerId:    string,
+  currentOwnerPlayerId: string,
+) {
+  const { data, error } = await supabase.rpc('transfer_group_ownership', {
+    p_group_id:         groupId,
+    p_new_owner_id:     newOwnerPlayerId,
+    p_current_owner_id: currentOwnerPlayerId,
+  });
+  if (error) throw error;
+  if (!data?.success) throw new Error(data?.error ?? 'Transfer failed');
+  return data;
+}
+
+// Leave a group — removes the membership row only.
+// Guard: owner cannot leave without transferring first.
+export async function leaveGroup(groupId: string, playerId: string) {
+  const { data: membership } = await supabase
+    .from('group_members')
+    .select('role')
+    .eq('group_id', groupId)
+    .eq('player_id', playerId)
+    .single();
+
+  if (membership?.role === 'owner') {
+    throw new Error('owner_must_transfer_first');
+  }
+
+  const { error } = await supabase
+    .from('group_members')
+    .delete()
+    .eq('group_id', groupId)
+    .eq('player_id', playerId);
+  if (error) throw error;
+}
+
+// Promote a player → admin (owner only)
+export async function promoteToAdmin(groupId: string, playerId: string) {
+  const { error } = await supabase
+    .from('group_members')
+    .update({ role: 'admin' })
+    .eq('group_id', groupId)
+    .eq('player_id', playerId)
+    .eq('role', 'player');
+  if (error) throw error;
+}
+
+// Demote an admin → player (owner only)
+export async function demoteToPlayer(groupId: string, playerId: string) {
+  const { error } = await supabase
+    .from('group_members')
+    .update({ role: 'player' })
+    .eq('group_id', groupId)
+    .eq('player_id', playerId)
+    .eq('role', 'admin');
+  if (error) throw error;
+}
+
+// New owner explicitly takes over billing responsibility
+export async function takeBillingOwnership(groupId: string, playerId: string) {
+  const { error } = await supabase
+    .from('groups')
+    .update({ billing_owner_id: playerId })
+    .eq('id', groupId)
+    .eq('owner_id', playerId);
+  if (error) throw error;
+}
