@@ -25,13 +25,32 @@ export async function getPlayerById(id: string) {
 export async function getCurrentUser() {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return null;
+
   const { data, error } = await supabase
     .from('players')
     .select('*')
     .eq('user_id', user.id)
     .single();
-  if (error) return null;
-  return data;
+
+  // Player record exists — return it
+  if (data) return data;
+
+  // No player record yet — auto-create one from auth metadata
+  const name = user.user_metadata?.name
+    || user.user_metadata?.full_name
+    || user.email?.split('@')[0]
+    || 'Player';
+
+  const { data: created } = await supabase.from('players').insert({
+    id:          `p_${Date.now()}`,
+    user_id:     user.id,
+    name,
+    position:    'Any',
+    skill_level: 'intermediate',
+    role:        'player',
+  }).select().single();
+
+  return created ?? null;
 }
 
 export interface CreatePlayerInput {
