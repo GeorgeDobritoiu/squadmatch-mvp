@@ -514,8 +514,8 @@ export default function HomeScreen() {
           ))}
         </View>
 
-        {/* Upgrade nudge for free users */}
-        {!isPremium && (
+        {/* Upgrade nudge — admin only */}
+        {isAdmin && !isPremium && (
           <TouchableOpacity style={s.upgradeNudge} onPress={() => router.push('/pricing')} activeOpacity={0.88}>
             <View style={{ flex: 1 }}>
               <Text style={s.upgradeNudgeTitle}>Upgrade to PRO 🏆</Text>
