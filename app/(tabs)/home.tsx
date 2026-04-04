@@ -1,3 +1,18 @@
+/**
+ * SquadPlay — Home Screen (redesign)
+ *
+ * Sections (in order):
+ *  1. Squad switcher header
+ *  2. Next match hero card + attendance
+ *  3. Your team (if generated)
+ *  4. Payment status
+ *  5. Admin actions (admin only)
+ *  6. Quick actions
+ *
+ * Empty states:
+ *  - No squad yet
+ *  - No match scheduled
+ */
 import React, { useState } from 'react';
 import {
   View,
@@ -5,10 +20,10 @@ import {
   ScrollView,
   StyleSheet,
   TouchableOpacity,
-  Modal,
-  Alert,
   ActivityIndicator,
   Platform,
+  Modal,
+  Alert,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -20,426 +35,729 @@ import {
   getCurrentUser,
   getAttendance,
   getPayments,
+  getGroup,
+  getPlayers,
   upsertAttendance,
   markPayment,
-  addGuest,
 } from '@/lib/data';
 import AddGuestModal from '@/components/AddGuestModal';
 
-const STATUS_COLORS: Record<string, { bg: string; text: string; label: string }> = {
-  open: { bg: colors.accentTint, text: colors.accentDark, label: 'Open' },
-  full: { bg: '#FEF3C7', text: '#D97706', label: 'Full' },
-  closed: { bg: '#FEE2E2', text: '#DC2626', label: 'Closed' },
-};
+// ── Tokens ────────────────────────────────────────────────────────────────────
+
+const GREEN       = '#22C55E';
+const GREEN_DARK  = '#16A34A';
+const GREEN_TINT  = '#F0FDF4';
+const GREEN_BDR   = '#BBF7D0';
+const RED         = '#EF4444';
+const RED_DARK    = '#DC2626';
+const RED_TINT    = '#FEF2F2';
+const RED_BDR     = '#FECACA';
+const AMBER       = '#F59E0B';
+const AMBER_TINT  = '#FFFBEB';
+const AMBER_BDR   = '#FDE68A';
+const NAVY        = '#0F2027';
+const GREY_BG     = '#F6F8FA';
+const GREY_CARD   = '#FFFFFF';
+const GREY_BORDER = '#E2E8F0';
+const GREY_TEXT   = '#5D7A8A';
+const GREY_LIGHT  = '#EEF2F5';
+const PURPLE      = '#7C3AED';
+const PURPLE_TINT = '#EDE9FE';
+
+// ── Helpers ───────────────────────────────────────────────────────────────────
+
+function getGreeting() {
+  const h = new Date().getHours();
+  if (h < 12) return 'Good morning';
+  if (h < 18) return 'Good afternoon';
+  return 'Good evening';
+}
+
+function formatMatchDate(date: string) {
+  const d = new Date(date + 'T12:00:00');
+  return d.toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long' });
+}
+
+function daysUntil(date: string) {
+  const today = new Date(); today.setHours(0, 0, 0, 0);
+  const match = new Date(date + 'T00:00:00');
+  const diff  = Math.round((match.getTime() - today.getTime()) / 86400000);
+  if (diff === 0)  return 'Today';
+  if (diff === 1)  return 'Tomorrow';
+  if (diff < 0)   return 'Past';
+  return `In ${diff} days`;
+}
+
+function avatarBg(name: string) {
+  const palette = ['#C8DCE8','#BBF7D0','#FDE68A','#FECACA','#DDD6FE','#FED7AA'];
+  return palette[name.charCodeAt(0) % palette.length];
+}
+
+// ── Avatar ────────────────────────────────────────────────────────────────────
+
+function Avatar({ name, size = 36, style }: { name: string; size?: number; style?: any }) {
+  const initials = name.split(' ').map((w) => w[0]).slice(0, 2).join('').toUpperCase();
+  return (
+    <View style={[{
+      width: size, height: size, borderRadius: size / 2,
+      backgroundColor: avatarBg(name),
+      justifyContent: 'center', alignItems: 'center',
+    }, style]}>
+      <Text style={{ fontSize: size * 0.38, fontWeight: '800', color: NAVY }}>{initials}</Text>
+    </View>
+  );
+}
+
+// ── Screen ────────────────────────────────────────────────────────────────────
 
 export default function HomeScreen() {
-  const router = useRouter();
-  const queryClient = useQueryClient();
-  const [guestModalVisible, setGuestModalVisible] = useState(false);
+  const router        = useRouter();
+  const queryClient   = useQueryClient();
+  const [guestModal, setGuestModal] = useState(false);
+
+  // ── Data ──────────────────────────────────────────────────────────────────
+
+  const { data: currentUser } = useQuery({ queryKey: ['currentUser'], queryFn: getCurrentUser });
+  const { data: group }        = useQuery({ queryKey: ['group'],       queryFn: getGroup });
+  const { data: players }      = useQuery({ queryKey: ['players'],     queryFn: getPlayers });
 
   const { data: match, isLoading: matchLoading } = useQuery({
     queryKey: ['nextMatch'],
-    queryFn: getNextMatch,
-  });
-
-  const { data: currentUser } = useQuery({
-    queryKey: ['currentUser'],
-    queryFn: getCurrentUser,
+    queryFn:  getNextMatch,
   });
 
   const { data: attendance } = useQuery({
     queryKey: ['attendance', match?.id],
-    queryFn: () => getAttendance(match!.id),
-    enabled: !!match?.id,
+    queryFn:  () => getAttendance(match!.id),
+    enabled:  !!match?.id,
   });
 
   const { data: payments } = useQuery({
     queryKey: ['payments', match?.id],
-    queryFn: () => getPayments(match!.id),
-    enabled: !!match?.id,
+    queryFn:  () => getPayments(match!.id),
+    enabled:  !!match?.id,
   });
 
-  const attendanceMutation = useMutation({
-    mutationFn: ({ status }: { status: string }) =>
-      upsertAttendance(match!.id, currentUser!.id, status),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['attendance'] }),
+  // ── Mutations ─────────────────────────────────────────────────────────────
+
+  const attendMutation = useMutation({
+    mutationFn: (status: string) => upsertAttendance(match!.id, currentUser!.id, status),
+    onSuccess:  () => queryClient.invalidateQueries({ queryKey: ['attendance'] }),
   });
 
-  const paymentMutation = useMutation({
-    mutationFn: (paymentId: string) => markPayment(paymentId, 'paid', 'revolut'),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['payments'] }),
+  const payMutation = useMutation({
+    mutationFn: (id: string) => markPayment(id, 'pending'),
+    onSuccess:  () => queryClient.invalidateQueries({ queryKey: ['payments'] }),
   });
 
-  const myAttendance = attendance?.find((a) => a.playerId === currentUser?.id);
-  const myPayment = payments?.find((p) => p.playerId === currentUser?.id);
-  const goingCount = attendance?.filter((a) => a.status === 'yes').length ?? 0;
+  // ── Derived ───────────────────────────────────────────────────────────────
 
-  const formatDate = (date: string) => {
-    const d = new Date(date + 'T12:00:00');
-    return d.toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long' });
-  };
+  const isAdmin     = currentUser?.role === 'admin';
+  const isPremium   = false; // wire to subscription when ready
+  const myAttendance = attendance?.find((a) => a.player_id === currentUser?.id);
+  const myPayment    = payments?.find((p) => p.player_id === currentUser?.id);
+  const goingList    = (attendance ?? []).filter((a) => a.status === 'yes');
+  const goingCount   = goingList.length;
+
+  // Teammates on my team
+  const myTeam = myAttendance?.team
+    ? goingList.filter((a) => a.team === myAttendance.team)
+    : [];
+  const teammates = myTeam
+    .map((a) => players?.find((p) => p.id === a.player_id))
+    .filter(Boolean) as any[];
+
+  const teamsGenerated = goingList.some((a) => a.team === 'A' || a.team === 'B');
+
+  // ── Loading ───────────────────────────────────────────────────────────────
 
   if (matchLoading) {
     return (
-      <SafeAreaView style={styles.container}>
-        <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color={colors.accent} />
+      <SafeAreaView style={s.safe} edges={['top']}>
+        <View style={s.loadingWrap}>
+          <ActivityIndicator size="large" color={GREEN} />
         </View>
       </SafeAreaView>
     );
   }
 
-  return (
-    <SafeAreaView style={styles.container} edges={['top']}>
-      <ScrollView style={styles.scroll} contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
-        {/* Header */}
-        <View style={styles.header}>
-          <View>
-            <Text style={styles.greeting}>Good morning 👋</Text>
-            <Text style={styles.userName}>{currentUser?.name ?? 'Player'}</Text>
-          </View>
-          <TouchableOpacity style={styles.avatarBtn}>
-            <View style={styles.avatarCircle}>
-              <Text style={styles.avatarInitial}>{(currentUser?.name ?? 'P')[0]}</Text>
-            </View>
-          </TouchableOpacity>
-        </View>
+  // ── No squad ──────────────────────────────────────────────────────────────
 
-        {/* Next Match Card */}
-        {match ? (
-          <View style={styles.matchCard}>
-            <View style={styles.matchCardHeader}>
-              <Text style={styles.matchCardTitle}>Next Match</Text>
-              {match.status && (
-                <View style={[styles.statusBadge, { backgroundColor: STATUS_COLORS[match.status]?.bg ?? colors.primaryTint }]}>
-                  <Text style={[styles.statusText, { color: STATUS_COLORS[match.status]?.text ?? colors.primary }]}>
-                    {STATUS_COLORS[match.status]?.label ?? match.status}
+  if (!group && !matchLoading) {
+    return (
+      <SafeAreaView style={s.safe} edges={['top']}>
+        <ScrollView contentContainerStyle={s.noSquadWrap}>
+          <Text style={{ fontSize: 56, marginBottom: 20 }}>🏟️</Text>
+          <Text style={s.noSquadTitle}>You're not in any squad yet</Text>
+          <Text style={s.noSquadSub}>
+            Join a squad using an invite link, or create your own in seconds.
+          </Text>
+          <TouchableOpacity style={s.noSquadPrimary} onPress={() => router.push('/create-group')}>
+            <Ionicons name="add-circle-outline" size={18} color="#fff" style={{ marginRight: 8 }} />
+            <Text style={s.noSquadPrimaryText}>Create a squad</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={s.noSquadSecondary}>
+            <Ionicons name="link-outline" size={18} color={NAVY} style={{ marginRight: 8 }} />
+            <Text style={s.noSquadSecondaryText}>Join via invite link</Text>
+          </TouchableOpacity>
+        </ScrollView>
+      </SafeAreaView>
+    );
+  }
+
+  // ── Main ──────────────────────────────────────────────────────────────────
+
+  const squadInitial = (group?.name ?? 'S')[0].toUpperCase();
+
+  return (
+    <SafeAreaView style={s.safe} edges={['top']}>
+      <ScrollView
+        style={s.scroll}
+        contentContainerStyle={s.content}
+        showsVerticalScrollIndicator={false}
+      >
+        {/* ── HEADER ── */}
+        <View style={s.header}>
+          {/* Squad switcher */}
+          <TouchableOpacity style={s.squadSwitcher} activeOpacity={0.75}>
+            <View style={s.squadLogo}>
+              <Text style={s.squadLogoText}>{squadInitial}</Text>
+            </View>
+            <View style={s.squadInfo}>
+              <Text style={s.squadName} numberOfLines={1}>{group?.name ?? 'My Squad'}</Text>
+              <View style={s.rolePlanRow}>
+                <View style={[s.roleBadge, isAdmin && s.roleBadgeAdmin]}>
+                  <Text style={[s.roleBadgeText, isAdmin && s.roleBadgeTextAdmin]}>
+                    {isAdmin ? 'Admin' : 'Player'}
                   </Text>
                 </View>
-              )}
-            </View>
-
-            <Text style={styles.matchDate}>{formatDate(match.date)}</Text>
-
-            <View style={styles.matchInfoRow}>
-              <View style={styles.matchInfoItem}>
-                <Ionicons name="time-outline" size={16} color={colors.textSecondary} />
-                <Text style={styles.matchInfoText}>{match.time}</Text>
-              </View>
-              <View style={styles.matchInfoItem}>
-                <Ionicons name="location-outline" size={16} color={colors.textSecondary} />
-                <Text style={styles.matchInfoText} numberOfLines={1}>{match.location}</Text>
-              </View>
-            </View>
-
-            <View style={styles.matchMetaRow}>
-              <View style={styles.matchMetaItem}>
-                <Text style={styles.matchMetaLabel}>Cost</Text>
-                <Text style={styles.matchMetaValue}>£{match.costPerPlayer?.toFixed(2)}</Text>
-              </View>
-              <View style={styles.matchMetaDivider} />
-              <View style={styles.matchMetaItem}>
-                <Text style={styles.matchMetaLabel}>Going</Text>
-                <Text style={styles.matchMetaValue}>{goingCount} players</Text>
-              </View>
-              <View style={styles.matchMetaDivider} />
-              <View style={styles.matchMetaItem}>
-                <Text style={styles.matchMetaLabel}>Your Status</Text>
-                <Text style={[styles.matchMetaValue, myAttendance?.status === 'yes' ? styles.textGreen : myAttendance?.status === 'no' ? styles.textRed : styles.textOrange]}>
-                  {myAttendance?.status ? myAttendance.status.charAt(0).toUpperCase() + myAttendance.status.slice(1) : '—'}
-                </Text>
-              </View>
-            </View>
-          </View>
-        ) : (
-          <View style={styles.emptyCard}>
-            <Ionicons name="football-outline" size={40} color={colors.textTertiary} />
-            <Text style={styles.emptyTitle}>No upcoming match</Text>
-            <Text style={styles.emptySubtitle}>Ask your admin to schedule the next one</Text>
-          </View>
-        )}
-
-        {/* Attendance Buttons */}
-        {match && match.status !== 'closed' && (
-          <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Are you in?</Text>
-            <View style={styles.attendanceRow}>
-              <TouchableOpacity
-                style={[styles.attendBtn, myAttendance?.status === 'yes' && styles.attendBtnActiveGreen]}
-                onPress={() => attendanceMutation.mutate({ status: 'yes' })}
-              >
-                <Ionicons name="checkmark-circle" size={20} color={myAttendance?.status === 'yes' ? colors.white : colors.accentDark} />
-                <Text style={[styles.attendBtnText, myAttendance?.status === 'yes' && styles.attendBtnTextActive]}>Yes</Text>
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                style={[styles.attendBtn, myAttendance?.status === 'no' && styles.attendBtnActiveRed]}
-                onPress={() => attendanceMutation.mutate({ status: 'no' })}
-              >
-                <Ionicons name="close-circle" size={20} color={myAttendance?.status === 'no' ? colors.white : '#EF4444'} />
-                <Text style={[styles.attendBtnText, myAttendance?.status === 'no' && styles.attendBtnTextActive]}>No</Text>
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                style={[styles.attendBtn, myAttendance?.status === 'maybe' && styles.attendBtnActiveMaybe]}
-                onPress={() => attendanceMutation.mutate({ status: 'maybe' })}
-              >
-                <Ionicons name="help-circle" size={20} color={myAttendance?.status === 'maybe' ? colors.white : '#D97706'} />
-                <Text style={[styles.attendBtnText, myAttendance?.status === 'maybe' && styles.attendBtnTextActive]}>Maybe</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        )}
-
-        {/* Action Buttons */}
-        {match && (
-          <View style={styles.section}>
-            <View style={styles.actionGrid}>
-              <TouchableOpacity style={styles.actionBtn} onPress={() => setGuestModalVisible(true)}>
-                <View style={[styles.actionIcon, { backgroundColor: '#EDE9FE' }]}>
-                  <Ionicons name="person-add-outline" size={20} color="#7C3AED" />
+                <Text style={s.roleSep}>·</Text>
+                <View style={[s.planBadge, isPremium && s.planBadgePremium]}>
+                  <Text style={[s.planBadgeText, isPremium && s.planBadgeTextPremium]}>
+                    {isPremium ? '⭐ Premium' : 'Free'}
+                  </Text>
                 </View>
-                <Text style={styles.actionBtnText}>Add Guest</Text>
-              </TouchableOpacity>
-
-              <TouchableOpacity style={styles.actionBtn} onPress={() => router.push(`/match/${match.id}`)}>
-                <View style={[styles.actionIcon, { backgroundColor: colors.primaryTint }]}>
-                  <Ionicons name="people-outline" size={20} color={colors.primary} />
-                </View>
-                <Text style={styles.actionBtnText}>View Match</Text>
-              </TouchableOpacity>
-
-              {match.teamsLocked ? (
-                <TouchableOpacity style={styles.actionBtn} onPress={() => router.push(`/teams/${match.id}`)}>
-                  <View style={[styles.actionIcon, { backgroundColor: colors.accentTint }]}>
-                    <Ionicons name="shield-checkmark-outline" size={20} color={colors.accentDark} />
-                  </View>
-                  <Text style={styles.actionBtnText}>My Team</Text>
-                </TouchableOpacity>
-              ) : null}
-              <TouchableOpacity style={styles.actionBtn} onPress={() => router.push('/calendar')}>
-                <View style={[styles.actionIcon, { backgroundColor: '#FEF3C7' }]}>
-                  <Ionicons name="calendar-outline" size={20} color="#D97706" />
-                </View>
-                <Text style={styles.actionBtnText}>Calendar</Text>
-              </TouchableOpacity>
-              <TouchableOpacity style={styles.actionBtn} onPress={() => router.push('/create-team')}>
-                <View style={[styles.actionIcon, { backgroundColor: '#EDE9FE' }]}>
-                  <Ionicons name="people" size={20} color="#7C3AED" />
-                </View>
-                <Text style={styles.actionBtnText}>New Team</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        )}
-
-        {/* Payment Banner */}
-        {myPayment && myPayment.status === 'unpaid' && (
-          <View style={styles.paymentBanner}>
-            <View style={styles.paymentBannerLeft}>
-              <Ionicons name="wallet-outline" size={20} color="#D97706" />
-              <View style={styles.paymentBannerText}>
-                <Text style={styles.paymentBannerTitle}>Payment Due</Text>
-                <Text style={styles.paymentBannerAmount}>£{myPayment.amount?.toFixed(2)}</Text>
               </View>
             </View>
-            <View style={styles.paymentBannerActions}>
-              <TouchableOpacity
-                style={styles.payNowBtn}
-                onPress={() => paymentMutation.mutate(myPayment.id)}
-              >
-                <Text style={styles.payNowBtnText}>Mark Paid</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        )}
-        {myPayment && myPayment.status === 'paid' && (
-          <View style={[styles.paymentBanner, styles.paymentPaid]}>
-            <Ionicons name="checkmark-circle" size={20} color={colors.accentDark} />
-            <Text style={styles.paymentPaidText}>Payment confirmed ✓</Text>
-          </View>
-        )}
+            <Ionicons name="chevron-down" size={18} color={GREY_TEXT} />
+          </TouchableOpacity>
 
-        {/* Recent Match */}
-        <View style={styles.section}>
-          <View style={styles.sectionRow}>
-            <Text style={styles.sectionTitle}>Recent Activity</Text>
-            <TouchableOpacity onPress={() => router.push('/history')}>
-              <Text style={styles.seeAll}>See all</Text>
-            </TouchableOpacity>
-          </View>
-          <TouchableOpacity style={styles.historyCard} onPress={() => router.push('/history')}>
-            <View style={styles.historyCardLeft}>
-              <View style={styles.historyIcon}>
-                <Ionicons name="trophy-outline" size={18} color="#D97706" />
-              </View>
-              <View>
-                <Text style={styles.historyTitle}>Sun 23 Mar — Final Score</Text>
-                <Text style={styles.historyScore}>Team A 3 – 2 Team B</Text>
-              </View>
-            </View>
-            <Ionicons name="chevron-forward" size={16} color={colors.textTertiary} />
+          {/* User avatar */}
+          <TouchableOpacity onPress={() => router.push('/(tabs)/profile')}>
+            <Avatar name={currentUser?.name ?? 'You'} size={44} />
           </TouchableOpacity>
         </View>
 
-        <View style={{ height: spacing.xl }} />
+        {/* Greeting */}
+        <View style={s.greetingRow}>
+          <Text style={s.greeting}>{getGreeting()}, </Text>
+          <Text style={s.greetingName}>{(currentUser?.name ?? 'there').split(' ')[0]} 👋</Text>
+        </View>
+
+        {/* ── NEXT MATCH HERO ── */}
+        {match ? (
+          <>
+            <View style={s.heroCard}>
+              {/* Top row */}
+              <View style={s.heroTopRow}>
+                <View style={s.heroLabel}>
+                  <Ionicons name="football" size={13} color="rgba(255,255,255,0.7)" />
+                  <Text style={s.heroLabelText}>NEXT MATCH</Text>
+                </View>
+                <View style={s.countdownPill}>
+                  <Text style={s.countdownText}>{daysUntil(match.date)}</Text>
+                </View>
+              </View>
+
+              {/* Date */}
+              <Text style={s.heroDate}>{formatMatchDate(match.date)}</Text>
+
+              {/* Details row */}
+              <View style={s.heroDetails}>
+                <View style={s.heroDetailItem}>
+                  <Ionicons name="time-outline" size={14} color="rgba(255,255,255,0.65)" />
+                  <Text style={s.heroDetailText}>{match.time}</Text>
+                </View>
+                <View style={s.heroDetailDot} />
+                <View style={s.heroDetailItem}>
+                  <Ionicons name="location-outline" size={14} color="rgba(255,255,255,0.65)" />
+                  <Text style={s.heroDetailText} numberOfLines={1}>{match.location}</Text>
+                </View>
+              </View>
+
+              {/* Stats strip */}
+              <View style={s.heroStrip}>
+                <View style={s.heroStripItem}>
+                  <Text style={s.heroStripNum}>£{(match.cost_per_player ?? 0).toFixed(2)}</Text>
+                  <Text style={s.heroStripLabel}>Per player</Text>
+                </View>
+                <View style={s.heroStripDiv} />
+                <View style={s.heroStripItem}>
+                  <Text style={s.heroStripNum}>{goingCount}</Text>
+                  <Text style={s.heroStripLabel}>Going</Text>
+                </View>
+                <View style={s.heroStripDiv} />
+                <TouchableOpacity
+                  style={s.heroStripItem}
+                  onPress={() => router.push(`/match/${match.id}`)}
+                >
+                  <Text style={[s.heroStripNum, { color: GREEN }]}>View →</Text>
+                  <Text style={s.heroStripLabel}>Details</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+
+            {/* ── ATTENDANCE ── */}
+            {match.status !== 'closed' && (
+              <View style={s.attendCard}>
+                <Text style={s.attendCardTitle}>Are you in?</Text>
+                {myAttendance?.status && (
+                  <Text style={s.attendCardSub}>
+                    Your response:{' '}
+                    <Text style={[
+                      s.attendCardSubBold,
+                      myAttendance.status === 'yes'   && { color: GREEN_DARK },
+                      myAttendance.status === 'no'    && { color: RED_DARK },
+                      myAttendance.status === 'maybe' && { color: '#92400E' },
+                    ]}>
+                      {myAttendance.status.charAt(0).toUpperCase() + myAttendance.status.slice(1)}
+                    </Text>
+                  </Text>
+                )}
+                <View style={s.attendBtns}>
+                  {[
+                    { status: 'yes',   label: 'YES',   icon: 'checkmark-circle' as const, activeStyle: s.attendYesActive,   iconColor: GREEN_DARK },
+                    { status: 'no',    label: 'NO',    icon: 'close-circle'     as const, activeStyle: s.attendNoActive,    iconColor: RED_DARK   },
+                    { status: 'maybe', label: 'MAYBE', icon: 'help-circle'      as const, activeStyle: s.attendMaybeActive, iconColor: '#92400E'  },
+                  ].map((btn) => {
+                    const active = myAttendance?.status === btn.status;
+                    return (
+                      <TouchableOpacity
+                        key={btn.status}
+                        style={[s.attendBtn, active && btn.activeStyle]}
+                        onPress={() => attendMutation.mutate(btn.status)}
+                        activeOpacity={0.8}
+                        disabled={attendMutation.isPending}
+                      >
+                        <Ionicons
+                          name={btn.icon}
+                          size={22}
+                          color={active ? '#fff' : btn.iconColor}
+                        />
+                        <Text style={[s.attendBtnLabel, active && s.attendBtnLabelActive]}>
+                          {btn.label}
+                        </Text>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </View>
+                {/* Add guest */}
+                <TouchableOpacity style={s.addGuestRow} onPress={() => setGuestModal(true)}>
+                  <Ionicons name="person-add-outline" size={15} color={GREY_TEXT} />
+                  <Text style={s.addGuestText}>Bringing someone? Add a guest</Text>
+                  <Ionicons name="chevron-forward" size={14} color={GREY_TEXT} />
+                </TouchableOpacity>
+              </View>
+            )}
+          </>
+        ) : (
+          /* ── NO MATCH ── */
+          <View style={s.noMatchCard}>
+            <View style={s.noMatchIcon}>
+              <Ionicons name="calendar-outline" size={28} color={GREY_TEXT} />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={s.noMatchTitle}>No match scheduled yet</Text>
+              <Text style={s.noMatchSub}>
+                {isAdmin ? 'Create the next match for your squad.' : 'Your admin will schedule the next one soon.'}
+              </Text>
+            </View>
+            {isAdmin && (
+              <TouchableOpacity style={s.noMatchCta} onPress={() => router.push('/schedule')}>
+                <Text style={s.noMatchCtaText}>Create</Text>
+              </TouchableOpacity>
+            )}
+          </View>
+        )}
+
+        {/* ── YOUR TEAM ── */}
+        {match && teamsGenerated && myAttendance?.team && (
+          <TouchableOpacity
+            style={s.teamCard}
+            onPress={() => router.push(`/teams/${match.id}`)}
+            activeOpacity={0.85}
+          >
+            <View style={s.teamCardHeader}>
+              <View style={s.teamLabelPill}>
+                <Text style={s.teamLabelText}>Team {myAttendance.team}</Text>
+              </View>
+              <Text style={s.teamCardTitle}>Your Team</Text>
+              <Text style={s.teamCardSeeAll}>See all →</Text>
+            </View>
+            <View style={s.teamAvatarRow}>
+              {teammates.slice(0, 6).map((p, i) => (
+                <View key={p.id} style={[s.teamAvatarWrap, { zIndex: 10 - i, marginLeft: i === 0 ? 0 : -10 }]}>
+                  <Avatar name={p.name} size={40} style={s.teamAvatar} />
+                </View>
+              ))}
+              {teammates.length > 6 && (
+                <View style={[s.teamAvatarWrap, s.teamAvatarMore, { marginLeft: -10 }]}>
+                  <Text style={s.teamAvatarMoreText}>+{teammates.length - 6}</Text>
+                </View>
+              )}
+              {teammates.length === 0 && (
+                <Text style={s.teamNoPlayers}>No teammates confirmed yet</Text>
+              )}
+            </View>
+          </TouchableOpacity>
+        )}
+
+        {/* ── PAYMENT STATUS ── */}
+        {myPayment && (
+          <TouchableOpacity
+            style={[
+              s.payCard,
+              myPayment.status === 'paid'    && s.payCardPaid,
+              myPayment.status === 'unpaid'  && s.payCardUnpaid,
+              myPayment.status === 'pending' && s.payCardPending,
+            ]}
+            onPress={() => router.push('/(tabs)/payments')}
+            activeOpacity={0.85}
+          >
+            <View style={[
+              s.payIconWrap,
+              myPayment.status === 'paid'    && { backgroundColor: GREEN_TINT  },
+              myPayment.status === 'unpaid'  && { backgroundColor: RED_TINT    },
+              myPayment.status === 'pending' && { backgroundColor: AMBER_TINT  },
+            ]}>
+              <Ionicons
+                name={
+                  myPayment.status === 'paid'   ? 'checkmark-circle' :
+                  myPayment.status === 'pending'? 'time-outline' : 'wallet-outline'
+                }
+                size={22}
+                color={
+                  myPayment.status === 'paid'   ? GREEN_DARK :
+                  myPayment.status === 'pending'? AMBER : RED_DARK
+                }
+              />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={s.payTitle}>
+                {myPayment.status === 'paid'
+                  ? 'Payment confirmed'
+                  : myPayment.status === 'pending'
+                  ? 'Payment pending review'
+                  : 'Payment due'}
+              </Text>
+              <Text style={s.payAmount}>
+                {myPayment.status === 'paid'
+                  ? `£${(myPayment.amount ?? 0).toFixed(2)} paid ✓`
+                  : `£${(myPayment.amount ?? 0).toFixed(2)} outstanding`}
+              </Text>
+            </View>
+            {myPayment.status === 'unpaid' && (
+              <TouchableOpacity
+                style={s.payAction}
+                onPress={(e) => { e.stopPropagation?.(); payMutation.mutate(myPayment.id); }}
+              >
+                <Text style={s.payActionText}>I've Paid</Text>
+              </TouchableOpacity>
+            )}
+            {myPayment.status !== 'unpaid' && (
+              <Ionicons name="chevron-forward" size={16} color={GREY_TEXT} />
+            )}
+          </TouchableOpacity>
+        )}
+
+        {/* ── ADMIN ACTIONS ── */}
+        {isAdmin && (
+          <View style={s.adminSection}>
+            <Text style={s.adminSectionLabel}>Admin</Text>
+            <View style={s.adminGrid}>
+              {[
+                { icon: 'add-circle-outline' as const, label: 'Create Match', color: GREEN,  bg: GREEN_TINT,  border: GREEN_BDR,  onPress: () => router.push('/schedule')          },
+                { icon: 'people-outline'      as const, label: 'Players',      color: NAVY,   bg: GREY_LIGHT,  border: GREY_BORDER, onPress: () => router.push('/(tabs)/group')      },
+                { icon: 'shuffle-outline'     as const, label: 'Teams',        color: PURPLE, bg: PURPLE_TINT, border: '#DDD6FE',  onPress: () => match && router.push(`/teams/${match.id}`) },
+                { icon: 'stats-chart-outline' as const, label: 'Stats',        color: AMBER,  bg: AMBER_TINT,  border: AMBER_BDR,  onPress: () => router.push('/history')           },
+              ].map((item) => (
+                <TouchableOpacity
+                  key={item.label}
+                  style={[s.adminBtn, { backgroundColor: item.bg, borderColor: item.border }]}
+                  onPress={item.onPress}
+                  activeOpacity={0.8}
+                >
+                  <View style={[s.adminBtnIcon, { backgroundColor: item.bg }]}>
+                    <Ionicons name={item.icon} size={22} color={item.color} />
+                  </View>
+                  <Text style={[s.adminBtnLabel, { color: item.color }]}>{item.label}</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+          </View>
+        )}
+
+        {/* ── QUICK ACTIONS ── */}
+        <View style={s.quickRow}>
+          {[
+            { icon: 'football-outline'  as const, label: 'Match',   onPress: () => match && router.push(`/match/${match.id}`), color: NAVY   },
+            { icon: 'people-outline'    as const, label: 'Squad',   onPress: () => router.push('/(tabs)/group'),               color: NAVY   },
+            { icon: 'time-outline'      as const, label: 'History', onPress: () => router.push('/history'),                    color: NAVY   },
+            { icon: 'star-outline'      as const, label: 'Rate',    onPress: () => match && router.push(`/rate/${match.id}`),  color: AMBER  },
+          ].map((q) => (
+            <TouchableOpacity key={q.label} style={s.quickBtn} onPress={q.onPress} activeOpacity={0.75}>
+              <View style={s.quickIcon}>
+                <Ionicons name={q.icon} size={20} color={q.color} />
+              </View>
+              <Text style={s.quickLabel}>{q.label}</Text>
+            </TouchableOpacity>
+          ))}
+        </View>
+
+        {/* Upgrade nudge for free users */}
+        {!isPremium && (
+          <TouchableOpacity style={s.upgradeNudge} onPress={() => router.push('/pricing')} activeOpacity={0.88}>
+            <View style={{ flex: 1 }}>
+              <Text style={s.upgradeNudgeTitle}>Upgrade to PRO 🏆</Text>
+              <Text style={s.upgradeNudgeSub}>Balanced teams · Player stats · Reminders</Text>
+            </View>
+            <View style={s.upgradeNudgeChip}>
+              <Text style={s.upgradeNudgeChipText}>From £6.39/mo</Text>
+            </View>
+          </TouchableOpacity>
+        )}
+
+        <View style={{ height: 32 }} />
       </ScrollView>
 
+      {/* Guest modal */}
       <AddGuestModal
-        visible={guestModalVisible}
-        onClose={() => setGuestModalVisible(false)}
+        visible={guestModal}
+        onClose={() => setGuestModal(false)}
         matchId={match?.id ?? ''}
-        sponsorId={currentUser?.id ?? 'p1'}
+        sponsorId={currentUser?.id ?? ''}
         onAdded={() => {
-          setGuestModalVisible(false);
-          queryClient.invalidateQueries({ queryKey: ['guests'] });
+          setGuestModal(false);
+          queryClient.invalidateQueries({ queryKey: ['attendance'] });
         }}
       />
     </SafeAreaView>
   );
 }
 
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: colors.backgroundSecondary },
-  scroll: { flex: 1 },
-  scrollContent: { padding: spacing.md },
-  loadingContainer: { flex: 1, justifyContent: 'center', alignItems: 'center' },
+// ── Styles ────────────────────────────────────────────────────────────────────
 
-  // Header
+const s = StyleSheet.create({
+  safe:        { flex: 1, backgroundColor: GREY_BG },
+  scroll:      { flex: 1 },
+  content:     { paddingHorizontal: 16, paddingTop: 8 },
+  loadingWrap: { flex: 1, justifyContent: 'center', alignItems: 'center' },
+
+  // ── Header ──────────────────────────────────────────────────────────────────
   header: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: spacing.lg,
-    paddingTop: spacing.sm,
+    flexDirection: 'row', alignItems: 'center',
+    justifyContent: 'space-between', marginBottom: 6,
   },
-  greeting: { ...typography.caption, color: colors.textSecondary },
-  userName: { ...typography.h2, color: colors.primary, marginTop: 2 },
-  avatarBtn: {},
-  avatarCircle: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: colors.primary,
-    justifyContent: 'center',
-    alignItems: 'center',
+  squadSwitcher: {
+    flex: 1, flexDirection: 'row', alignItems: 'center',
+    backgroundColor: GREY_CARD, borderRadius: 18,
+    borderWidth: 1, borderColor: GREY_BORDER,
+    paddingHorizontal: 12, paddingVertical: 9,
+    marginRight: 10,
+    ...shadows.xs,
+  } as any,
+  squadLogo: {
+    width: 36, height: 36, borderRadius: 18,
+    backgroundColor: NAVY, justifyContent: 'center', alignItems: 'center',
+    marginRight: 10,
   },
-  avatarInitial: { ...typography.bodyBold, color: colors.white },
+  squadLogoText: { fontSize: 16, fontWeight: '800', color: '#fff' },
+  squadInfo:     { flex: 1 },
+  squadName:     { fontSize: 15, fontWeight: '700', color: NAVY, marginBottom: 3 },
+  rolePlanRow:   { flexDirection: 'row', alignItems: 'center', gap: 5 },
+  roleBadge:     { backgroundColor: GREY_LIGHT, borderRadius: 50, paddingHorizontal: 8, paddingVertical: 2 },
+  roleBadgeAdmin:{ backgroundColor: '#DCFCE7', borderWidth: 1, borderColor: GREEN_BDR },
+  roleBadgeText: { fontSize: 10, fontWeight: '700', color: GREY_TEXT },
+  roleBadgeTextAdmin: { color: GREEN_DARK },
+  roleSep:       { fontSize: 10, color: GREY_TEXT },
+  planBadge:     { backgroundColor: GREY_LIGHT, borderRadius: 50, paddingHorizontal: 8, paddingVertical: 2 },
+  planBadgePremium: { backgroundColor: '#FEF3C7', borderWidth: 1, borderColor: AMBER_BDR },
+  planBadgeText: { fontSize: 10, fontWeight: '700', color: GREY_TEXT },
+  planBadgeTextPremium: { color: '#92400E' },
 
-  // Match Card
-  matchCard: {
-    backgroundColor: colors.primary,
-    borderRadius: borderRadius.xl,
-    padding: spacing.lg,
-    marginBottom: spacing.md,
+  // ── Greeting ─────────────────────────────────────────────────────────────
+  greetingRow:  { flexDirection: 'row', marginBottom: 16, marginTop: 8 },
+  greeting:     { fontSize: 16, color: GREY_TEXT, fontWeight: '400' },
+  greetingName: { fontSize: 16, fontWeight: '700', color: NAVY },
+
+  // ── Hero card ─────────────────────────────────────────────────────────────
+  heroCard: {
+    backgroundColor: NAVY, borderRadius: 24,
+    padding: 20, marginBottom: 12,
     ...shadows.lg,
-  },
-  matchCardHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: spacing.sm },
-  matchCardTitle: { ...typography.small, color: 'rgba(255,255,255,0.7)', textTransform: 'uppercase', letterSpacing: 1 },
-  statusBadge: { paddingHorizontal: spacing.sm, paddingVertical: 3, borderRadius: borderRadius.full },
-  statusText: { ...typography.tiny, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 0.5 },
-  matchDate: { ...typography.h3, color: colors.white, marginBottom: spacing.md },
-  matchInfoRow: { flexDirection: 'row', gap: spacing.md, marginBottom: spacing.md },
-  matchInfoItem: { flexDirection: 'row', alignItems: 'center', gap: 5 },
-  matchInfoText: { ...typography.caption, color: 'rgba(255,255,255,0.8)', flex: 1 },
-  matchMetaRow: { flexDirection: 'row', backgroundColor: 'rgba(255,255,255,0.1)', borderRadius: borderRadius.lg, padding: spacing.md },
-  matchMetaItem: { flex: 1, alignItems: 'center' },
-  matchMetaLabel: { ...typography.tiny, color: 'rgba(255,255,255,0.6)', marginBottom: 2 },
-  matchMetaValue: { ...typography.captionBold, color: colors.white },
-  matchMetaDivider: { width: 1, backgroundColor: 'rgba(255,255,255,0.2)' },
+  } as any,
+  heroTopRow:    { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 },
+  heroLabel:     { flexDirection: 'row', alignItems: 'center', gap: 5 },
+  heroLabelText: { fontSize: 11, fontWeight: '700', color: 'rgba(255,255,255,0.6)', letterSpacing: 1.2, textTransform: 'uppercase' },
+  countdownPill: { backgroundColor: 'rgba(255,255,255,0.12)', borderRadius: 50, paddingHorizontal: 12, paddingVertical: 4 },
+  countdownText: { fontSize: 12, fontWeight: '700', color: '#fff' },
+  heroDate:      { fontSize: 22, fontWeight: '800', color: '#fff', marginBottom: 10, lineHeight: 26 },
+  heroDetails:   { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 16 },
+  heroDetailItem:{ flexDirection: 'row', alignItems: 'center', gap: 5 },
+  heroDetailText:{ fontSize: 13, color: 'rgba(255,255,255,0.75)', fontWeight: '500' },
+  heroDetailDot: { width: 3, height: 3, borderRadius: 2, backgroundColor: 'rgba(255,255,255,0.3)' },
+  heroStrip:     { flexDirection: 'row', backgroundColor: 'rgba(255,255,255,0.08)', borderRadius: 14, paddingVertical: 12 },
+  heroStripItem: { flex: 1, alignItems: 'center' },
+  heroStripNum:  { fontSize: 16, fontWeight: '800', color: '#fff', marginBottom: 2 },
+  heroStripLabel:{ fontSize: 10, color: 'rgba(255,255,255,0.55)', fontWeight: '600', textTransform: 'uppercase', letterSpacing: 0.5 },
+  heroStripDiv:  { width: 1, backgroundColor: 'rgba(255,255,255,0.12)' },
 
-  // Empty
-  emptyCard: {
-    backgroundColor: colors.white,
-    borderRadius: borderRadius.xl,
-    padding: spacing.xl,
-    alignItems: 'center',
-    marginBottom: spacing.md,
+  // ── Attendance ────────────────────────────────────────────────────────────
+  attendCard: {
+    backgroundColor: GREY_CARD, borderRadius: 22,
+    padding: 18, marginBottom: 14,
+    borderWidth: 1, borderColor: GREY_BORDER,
     ...shadows.sm,
-  },
-  emptyTitle: { ...typography.h4, color: colors.text, marginTop: spacing.md },
-  emptySubtitle: { ...typography.caption, color: colors.textSecondary, marginTop: spacing.xs, textAlign: 'center' },
-
-  // Section
-  section: { marginBottom: spacing.md },
-  sectionRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: spacing.sm },
-  sectionTitle: { ...typography.captionBold, color: colors.text, textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: spacing.sm },
-  seeAll: { ...typography.caption, color: colors.accent, fontWeight: '600' },
-
-  // Attendance
-  attendanceRow: { flexDirection: 'row', gap: spacing.sm },
+  } as any,
+  attendCardTitle:   { fontSize: 15, fontWeight: '700', color: NAVY, marginBottom: 4 },
+  attendCardSub:     { fontSize: 12, color: GREY_TEXT, marginBottom: 14 },
+  attendCardSubBold: { fontWeight: '700' },
+  attendBtns:        { flexDirection: 'row', gap: 8, marginBottom: 14 },
   attendBtn: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 6,
-    paddingVertical: 14,
-    borderRadius: borderRadius.lg,
-    backgroundColor: colors.white,
-    borderWidth: 1.5,
-    borderColor: colors.border,
+    flex: 1, flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+    paddingVertical: 14, borderRadius: 16,
+    backgroundColor: GREY_LIGHT, borderWidth: 1.5, borderColor: GREY_BORDER, gap: 5,
+  },
+  attendYesActive:   { backgroundColor: GREEN_DARK, borderColor: GREEN_DARK },
+  attendNoActive:    { backgroundColor: RED_DARK,   borderColor: RED_DARK   },
+  attendMaybeActive: { backgroundColor: AMBER,      borderColor: AMBER      },
+  attendBtnLabel:    { fontSize: 11, fontWeight: '800', color: GREY_TEXT, letterSpacing: 0.5 },
+  attendBtnLabelActive: { color: '#fff' },
+  addGuestRow: {
+    flexDirection: 'row', alignItems: 'center', gap: 6,
+    paddingTop: 4, borderTopWidth: 1, borderTopColor: GREY_BORDER,
+  },
+  addGuestText: { flex: 1, fontSize: 13, color: GREY_TEXT },
+
+  // ── No match ──────────────────────────────────────────────────────────────
+  noMatchCard: {
+    flexDirection: 'row', alignItems: 'center',
+    backgroundColor: GREY_CARD, borderRadius: 22,
+    padding: 18, marginBottom: 14, gap: 14,
+    borderWidth: 1, borderColor: GREY_BORDER,
+    ...shadows.sm,
+  } as any,
+  noMatchIcon: {
+    width: 52, height: 52, borderRadius: 16,
+    backgroundColor: GREY_LIGHT, justifyContent: 'center', alignItems: 'center',
+  },
+  noMatchTitle: { fontSize: 15, fontWeight: '700', color: NAVY, marginBottom: 3 },
+  noMatchSub:   { fontSize: 12, color: GREY_TEXT, lineHeight: 17 },
+  noMatchCta: {
+    backgroundColor: NAVY, borderRadius: 12, paddingHorizontal: 16, paddingVertical: 10,
+  },
+  noMatchCtaText: { fontSize: 13, fontWeight: '700', color: '#fff' },
+
+  // ── Your team ─────────────────────────────────────────────────────────────
+  teamCard: {
+    backgroundColor: GREY_CARD, borderRadius: 22, padding: 18,
+    marginBottom: 14, borderWidth: 1, borderColor: GREY_BORDER,
+    ...shadows.sm,
+  } as any,
+  teamCardHeader:  { flexDirection: 'row', alignItems: 'center', marginBottom: 14 },
+  teamLabelPill:   { backgroundColor: GREEN_TINT, borderRadius: 50, paddingHorizontal: 10, paddingVertical: 4, marginRight: 10 },
+  teamLabelText:   { fontSize: 11, fontWeight: '800', color: GREEN_DARK },
+  teamCardTitle:   { flex: 1, fontSize: 15, fontWeight: '700', color: NAVY },
+  teamCardSeeAll:  { fontSize: 13, color: GREEN_DARK, fontWeight: '600' },
+  teamAvatarRow:   { flexDirection: 'row', alignItems: 'center' },
+  teamAvatarWrap:  { borderWidth: 2, borderColor: GREY_CARD, borderRadius: 22 },
+  teamAvatar:      {},
+  teamAvatarMore: {
+    width: 40, height: 40, borderRadius: 20,
+    backgroundColor: GREY_LIGHT,
+    justifyContent: 'center', alignItems: 'center',
+  },
+  teamAvatarMoreText: { fontSize: 12, fontWeight: '800', color: NAVY },
+  teamNoPlayers:   { fontSize: 13, color: GREY_TEXT },
+
+  // ── Payment ───────────────────────────────────────────────────────────────
+  payCard: {
+    flexDirection: 'row', alignItems: 'center', gap: 12,
+    backgroundColor: GREY_CARD, borderRadius: 22,
+    padding: 16, marginBottom: 14,
+    borderWidth: 1.5, borderColor: GREY_BORDER,
+    ...shadows.sm,
+  } as any,
+  payCardPaid:    { borderColor: GREEN_BDR },
+  payCardUnpaid:  { borderColor: RED_BDR   },
+  payCardPending: { borderColor: AMBER_BDR },
+  payIconWrap:    { width: 48, height: 48, borderRadius: 14, justifyContent: 'center', alignItems: 'center' },
+  payTitle:       { fontSize: 14, fontWeight: '700', color: NAVY, marginBottom: 2 },
+  payAmount:      { fontSize: 12, color: GREY_TEXT, fontWeight: '500' },
+  payAction: {
+    backgroundColor: NAVY, borderRadius: 12,
+    paddingHorizontal: 14, paddingVertical: 9,
+  },
+  payActionText: { fontSize: 12, fontWeight: '700', color: '#fff' },
+
+  // ── Admin ─────────────────────────────────────────────────────────────────
+  adminSection:    { marginBottom: 14 },
+  adminSectionLabel: {
+    fontSize: 11, fontWeight: '700', color: GREY_TEXT,
+    textTransform: 'uppercase', letterSpacing: 1, marginBottom: 10,
+  },
+  adminGrid: { flexDirection: 'row', gap: 8 },
+  adminBtn: {
+    flex: 1, alignItems: 'center', paddingVertical: 14,
+    borderRadius: 18, borderWidth: 1.5, gap: 6,
+  },
+  adminBtnIcon:  { marginBottom: 2 },
+  adminBtnLabel: { fontSize: 11, fontWeight: '700' },
+
+  // ── Quick actions ─────────────────────────────────────────────────────────
+  quickRow: {
+    flexDirection: 'row', gap: 8, marginBottom: 14,
+  },
+  quickBtn: {
+    flex: 1, alignItems: 'center', gap: 6,
+    backgroundColor: GREY_CARD, borderRadius: 18,
+    paddingVertical: 14, borderWidth: 1, borderColor: GREY_BORDER,
     ...shadows.xs,
-  },
-  attendBtnActiveGreen: { backgroundColor: colors.accentDark, borderColor: colors.accentDark },
-  attendBtnActiveRed: { backgroundColor: '#EF4444', borderColor: '#EF4444' },
-  attendBtnActiveMaybe: { backgroundColor: '#D97706', borderColor: '#D97706' },
-  attendBtnText: { ...typography.captionBold, color: colors.text },
-  attendBtnTextActive: { color: colors.white },
+  } as any,
+  quickIcon: {},
+  quickLabel: { fontSize: 11, fontWeight: '600', color: NAVY },
 
-  // Action Grid
-  actionGrid: { flexDirection: 'row', gap: spacing.sm },
-  actionBtn: {
-    flex: 1,
-    backgroundColor: colors.white,
-    borderRadius: borderRadius.lg,
-    padding: spacing.md,
-    alignItems: 'center',
-    gap: spacing.xs,
-    ...shadows.xs,
+  // ── Upgrade nudge ─────────────────────────────────────────────────────────
+  upgradeNudge: {
+    flexDirection: 'row', alignItems: 'center',
+    backgroundColor: NAVY, borderRadius: 22,
+    padding: 18, marginBottom: 14,
+    ...shadows.md,
+  } as any,
+  upgradeNudgeTitle: { fontSize: 15, fontWeight: '700', color: '#fff', marginBottom: 3 },
+  upgradeNudgeSub:   { fontSize: 12, color: 'rgba(255,255,255,0.65)' },
+  upgradeNudgeChip: {
+    backgroundColor: GREEN, borderRadius: 50,
+    paddingHorizontal: 14, paddingVertical: 8,
   },
-  actionIcon: { width: 40, height: 40, borderRadius: borderRadius.md, justifyContent: 'center', alignItems: 'center' },
-  actionBtnText: { ...typography.tiny, fontWeight: '600', color: colors.text, textAlign: 'center' },
+  upgradeNudgeChipText: { fontSize: 12, fontWeight: '800', color: '#fff' },
 
-  // Payment Banner
-  paymentBanner: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    backgroundColor: '#FEF3C7',
-    borderRadius: borderRadius.lg,
-    padding: spacing.md,
-    marginBottom: spacing.md,
-    borderWidth: 1,
-    borderColor: '#FDE68A',
+  // ── No squad ──────────────────────────────────────────────────────────────
+  noSquadWrap: {
+    flex: 1, justifyContent: 'center', alignItems: 'center',
+    paddingHorizontal: 32, paddingVertical: 64,
   },
-  paymentPaid: { backgroundColor: colors.accentTint, borderColor: '#86EFAC' },
-  paymentBannerLeft: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
-  paymentBannerText: {},
-  paymentBannerTitle: { ...typography.small, color: '#92400E', fontWeight: '600' },
-  paymentBannerAmount: { ...typography.captionBold, color: '#78350F' },
-  paymentBannerActions: {},
-  payNowBtn: { backgroundColor: '#D97706', paddingHorizontal: spacing.md, paddingVertical: spacing.sm, borderRadius: borderRadius.md },
-  payNowBtnText: { ...typography.smallBold, color: colors.white },
-  paymentPaidText: { ...typography.captionBold, color: colors.accentDark, marginLeft: spacing.sm },
-
-  // History
-  historyCard: {
-    backgroundColor: colors.white,
-    borderRadius: borderRadius.lg,
-    padding: spacing.md,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    ...shadows.xs,
+  noSquadTitle: { fontSize: 22, fontWeight: '800', color: NAVY, textAlign: 'center', marginBottom: 12 },
+  noSquadSub:   { fontSize: 14, color: GREY_TEXT, textAlign: 'center', lineHeight: 21, marginBottom: 32 },
+  noSquadPrimary: {
+    width: '100%', flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
+    backgroundColor: GREEN, borderRadius: 16, paddingVertical: 16, marginBottom: 12,
   },
-  historyCardLeft: { flexDirection: 'row', alignItems: 'center', gap: spacing.md },
-  historyIcon: { width: 40, height: 40, borderRadius: borderRadius.md, backgroundColor: '#FEF3C7', justifyContent: 'center', alignItems: 'center' },
-  historyTitle: { ...typography.caption, color: colors.textSecondary },
-  historyScore: { ...typography.captionBold, color: colors.text, marginTop: 2 },
-
-  // Text colours
-  textGreen: { color: colors.accentLight },
-  textRed: { color: '#F87171' },
-  textOrange: { color: '#FBBF24' },
+  noSquadPrimaryText: { fontSize: 16, fontWeight: '700', color: '#fff' },
+  noSquadSecondary: {
+    width: '100%', flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
+    borderWidth: 1.5, borderColor: GREY_BORDER,
+    backgroundColor: GREY_CARD, borderRadius: 16, paddingVertical: 16,
+  },
+  noSquadSecondaryText: { fontSize: 16, fontWeight: '700', color: NAVY },
 });
