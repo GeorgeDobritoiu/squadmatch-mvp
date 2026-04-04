@@ -356,8 +356,8 @@ export default function GroupScreen() {
           </View>
         </View>
 
-        {/* ── Free Tier Banner ─────────────────────────────────────────── */}
-        {isFreeTier && (
+        {/* ── Free Tier Banner — admin/owner only ──────────────────────── */}
+        {isFreeTier && isAdmin && (
           <TouchableOpacity style={styles.freeBanner} onPress={() => router.push('/pricing')} activeOpacity={0.88}>
             <View style={{ flex: 1 }}>
               <Text style={styles.freeBannerTitle}>Free plan · 1 admin max</Text>
