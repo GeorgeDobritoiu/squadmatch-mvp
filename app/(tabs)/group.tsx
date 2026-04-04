@@ -444,17 +444,27 @@ export default function GroupScreen() {
         {/* ── Members ───────────────────────────────────────────────────── */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Members ({displayMembers.length})</Text>
-          {[...displayMembers]
-            .sort((a, b) => {
+          {(() => {
+            const sorted = [...displayMembers].sort((a, b) => {
+              const aIsMe = a.id === currentUser?.id ? -1 : 0;
+              const bIsMe = b.id === currentUser?.id ? -1 : 0;
+              if (aIsMe !== bIsMe) return aIsMe - bIsMe;
               const order = { owner: 0, admin: 1, player: 2 };
               const roleSort = order[a.role] - order[b.role];
               if (roleSort !== 0) return roleSort;
               return (ratings?.[b.id] ?? 3) - (ratings?.[a.id] ?? 3);
-            })
-            .map((member) => {
-              const roleCfg    = ROLE_CONFIG[member.role];
-              const isMe       = member.id === currentUser?.id;
-              const canManage  = isOwner && !isMe && member.role !== 'owner';
+            });
+            // On free tier, only the first admin in the list shows the Admin badge
+            let adminBadgeShown = false;
+            return sorted.map((member) => {
+              const isMe      = member.id === currentUser?.id;
+              const canManage = isOwner && !isMe && member.role !== 'owner';
+              let displayRole = member.role;
+              if (member.role === 'admin' && isFreeTier) {
+                if (!adminBadgeShown) { adminBadgeShown = true; }
+                else { displayRole = 'player'; }
+              }
+              const roleCfg = ROLE_CONFIG[displayRole] ?? ROLE_CONFIG.player;
 
               return (
                 <TouchableOpacity
@@ -490,7 +500,7 @@ export default function GroupScreen() {
                       <Text style={styles.memberName}>{member.name}</Text>
 
                       {/* Role badge */}
-                      {member.role !== 'player' && (
+                      {displayRole !== 'player' && (
                         <View style={[styles.roleBadge, { backgroundColor: roleCfg.bg, borderColor: roleCfg.border }]}>
                           <Ionicons name={roleCfg.icon} size={10} color={roleCfg.text} />
                           <Text style={[styles.roleBadgeText, { color: roleCfg.text }]}>{roleCfg.label}</Text>
@@ -529,7 +539,8 @@ export default function GroupScreen() {
                   )}
                 </TouchableOpacity>
               );
-            })}
+            });
+          })()}
 
           {/* ── Owner: transfer ownership shortcut ── */}
           {isOwner && eligibleAdmins.length > 0 && (
