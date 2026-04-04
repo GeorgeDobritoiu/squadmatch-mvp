@@ -300,7 +300,7 @@ export default function MatchDetailScreen() {
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>Guests ({guests?.length})</Text>
             {(guests ?? []).map((g) => {
-              const sponsor = getPlayer(g.sponsorId);
+              const sponsor = getPlayer(g.sponsor_id);
               return (
                 <View key={g.id} style={styles.guestRow}>
                   <View style={[styles.playerAvatar, { backgroundColor: '#EDE9FE' }]}>
@@ -308,20 +308,20 @@ export default function MatchDetailScreen() {
                   </View>
                   <View style={styles.playerInfo}>
                     <Text style={styles.playerName}>{g.name}</Text>
-                    <Text style={styles.guestMeta}>via {sponsor?.name ?? g.sponsorId} · {g.type.replace('_', ' ')}</Text>
+                    <Text style={styles.guestMeta}>via {sponsor?.name ?? g.sponsor_id} · {g.type.replace('_', ' ')}</Text>
                   </View>
                   {g.team && (
                     <View style={[styles.teamBadge, { backgroundColor: g.team === 'A' ? colors.primaryTint : '#FEE2E2' }]}>
                       <Text style={[styles.teamBadgeText, { color: g.team === 'A' ? colors.primary : '#DC2626' }]}>Team {g.team}</Text>
                     </View>
                   )}
-                  {isAdmin && match.status !== 'closed' && (
+                  {(isAdmin || g.sponsor_id === currentUser?.id) && match.status !== 'closed' && (
                     <TouchableOpacity
                       onPress={() => handleRemoveGuest(g.id, g.name)}
                       hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
                       style={{ marginLeft: 4 }}
                     >
-                      <Ionicons name="trash-outline" size={18} color="#EF4444" />
+                      <Ionicons name="close-circle" size={22} color="#EF4444" />
                     </TouchableOpacity>
                   )}
                 </View>
