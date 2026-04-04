@@ -77,13 +77,27 @@ export async function createPlayer(input: CreatePlayerInput) {
 // ── Group ────────────────────────────────────────────────────────────────────
 
 export async function getGroup() {
-  const { data, error } = await supabase
-    .from('groups')
-    .select('*')
-    .limit(1)
-    .single();
-  if (error) return null;
-  return data;
+  const currentPlayer = await getCurrentUser();
+  if (currentPlayer) {
+    // Try to find the group this player is a member of
+    const { data: membership } = await supabase
+      .from('group_members')
+      .select('group_id')
+      .eq('player_id', currentPlayer.id)
+      .limit(1)
+      .single();
+    if (membership?.group_id) {
+      const { data } = await supabase
+        .from('groups')
+        .select('*')
+        .eq('id', membership.group_id)
+        .single();
+      if (data) return data;
+    }
+  }
+  // Fallback: first group in DB
+  const { data } = await supabase.from('groups').select('*').limit(1).single();
+  return data ?? null;
 }
 
 export async function getUserGroups(playerId: string) {
@@ -113,13 +127,34 @@ export async function createGroup(input: CreateGroupInput) {
   const meta = [input.sport, input.format, input.frequency]
     .filter(Boolean)
     .join(' · ');
+
+  // Get current user's player record
+  const currentPlayer = await getCurrentUser();
+  if (!currentPlayer) throw new Error('Not logged in');
+
   const { data, error } = await supabase.from('groups').insert({
     id,
     name:        input.name,
     location:    input.location ?? '',
     description: input.description ? `${input.description}\n\n${meta}` : meta,
+    owner_id:    currentPlayer.id,
   }).select().single();
   if (error) throw error;
+
+  // Add creator as owner in group_members
+  await supabase.from('group_members').insert({
+    id:        `mem_${Date.now()}`,
+    group_id:  id,
+    player_id: currentPlayer.id,
+    role:      'owner',
+    joined_at: new Date().toISOString(),
+  });
+
+  // Also update the player's role to admin if they aren't already
+  if (currentPlayer.role === 'player') {
+    await supabase.from('players').update({ role: 'admin' }).eq('id', currentPlayer.id);
+  }
+
   return data;
 }
 
