@@ -87,23 +87,38 @@ export async function getGroup(groupId?: string) {
 }
 
 export async function getUserGroups(playerId: string) {
-  // Two separate queries to avoid FK join issues
+  // Groups via group_members rows
   const { data: memberships } = await supabase
     .from('group_members')
     .select('group_id, role')
     .eq('player_id', playerId);
-  if (!memberships?.length) return [];
 
-  const groupIds = memberships.map((m) => m.group_id);
-  const { data: groups } = await supabase
-    .from('groups')
-    .select('*')
-    .in('id', groupIds);
+  const memberGroupIds = (memberships ?? []).map((m) => m.group_id);
 
-  return (groups ?? []).map((g) => ({
-    ...g,
-    myRole: memberships.find((m) => m.group_id === g.id)?.role ?? 'player',
-  }));
+  // Also fetch ALL groups that have NO group_members rows at all (legacy groups created before membership tracking)
+  const { data: allGroups } = await supabase.from('groups').select('*');
+  const { data: allMemberships } = await supabase.from('group_members').select('group_id');
+  const groupsWithMembers = new Set((allMemberships ?? []).map((m) => m.group_id));
+  const legacyGroups = (allGroups ?? []).filter((g) => !groupsWithMembers.has(g.id));
+
+  // Fetch groups the user is explicitly a member of
+  const memberGroups = memberGroupIds.length > 0
+    ? (allGroups ?? []).filter((g) => memberGroupIds.includes(g.id))
+    : [];
+
+  // Merge: explicit memberships + legacy groups (deduplicated)
+  const seen = new Set<string>();
+  const result = [];
+  for (const g of [...memberGroups, ...legacyGroups]) {
+    if (!seen.has(g.id)) {
+      seen.add(g.id);
+      result.push({
+        ...g,
+        myRole: memberships?.find((m) => m.group_id === g.id)?.role ?? 'player',
+      });
+    }
+  }
+  return result;
 }
 
 export interface CreateGroupInput {
