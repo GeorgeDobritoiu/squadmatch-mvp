@@ -76,22 +76,23 @@ export async function createPlayer(input: CreatePlayerInput) {
 
 // ── Group ────────────────────────────────────────────────────────────────────
 
-export async function getGroup() {
+export async function getGroup(groupId?: string) {
+  // If specific groupId requested, fetch it directly
+  if (groupId) {
+    const { data } = await supabase.from('groups').select('*').eq('id', groupId).maybeSingle();
+    return data ?? null;
+  }
+  // Otherwise find the first group the current user belongs to
   const currentPlayer = await getCurrentUser();
   if (currentPlayer) {
-    // Try to find the group this player is a member of
-    const { data: membership } = await supabase
+    const { data: memberships } = await supabase
       .from('group_members')
       .select('group_id')
       .eq('player_id', currentPlayer.id)
-      .limit(1)
-      .maybeSingle();
-    if (membership?.group_id) {
-      const { data } = await supabase
-        .from('groups')
-        .select('*')
-        .eq('id', membership.group_id)
-        .single();
+      .limit(1);
+    const gid = memberships?.[0]?.group_id;
+    if (gid) {
+      const { data } = await supabase.from('groups').select('*').eq('id', gid).maybeSingle();
       if (data) return data;
     }
   }
@@ -101,14 +102,22 @@ export async function getGroup() {
 }
 
 export async function getUserGroups(playerId: string) {
-  const { data, error } = await supabase
+  // Two separate queries to avoid FK join issues
+  const { data: memberships } = await supabase
     .from('group_members')
-    .select('group_id, role, groups(*)')
+    .select('group_id, role')
     .eq('player_id', playerId);
-  if (error) return [];
-  return (data ?? []).map((row: any) => ({
-    ...row.groups,
-    myRole: row.role,
+  if (!memberships?.length) return [];
+
+  const groupIds = memberships.map((m) => m.group_id);
+  const { data: groups } = await supabase
+    .from('groups')
+    .select('*')
+    .in('id', groupIds);
+
+  return (groups ?? []).map((g) => ({
+    ...g,
+    myRole: memberships.find((m) => m.group_id === g.id)?.role ?? 'player',
   }));
 }
 

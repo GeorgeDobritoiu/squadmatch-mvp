@@ -20,6 +20,7 @@ import {
   getCurrentUser,
   getAllPlayerRatings,
   getGroupMembers,
+  getUserGroups,
   transferOwnership,
   leaveGroup,
   promoteToAdmin,
@@ -95,11 +96,30 @@ export default function GroupScreen() {
   // ── Billing takeover ──────────────────────────────────────────────────────
   const [billingModal, setBillingModal] = useState(false);
 
+  // ── Active group selector ─────────────────────────────────────────────────
+  const [activeGroupId, setActiveGroupId] = useState<string | null>(null);
+
   // ── Queries ───────────────────────────────────────────────────────────────
 
+  const { data: currentUser } = useQuery({
+    queryKey: ['currentUser'],
+    queryFn:  getCurrentUser,
+  });
+
+  const { data: userGroups } = useQuery({
+    queryKey: ['userGroups', currentUser?.id],
+    queryFn:  () => getUserGroups(currentUser!.id),
+    enabled:  !!currentUser?.id,
+    onSuccess: (groups: any[]) => {
+      if (groups.length > 0 && !activeGroupId) {
+        setActiveGroupId(groups[0].id);
+      }
+    },
+  } as any);
+
   const { data: group, isLoading: groupLoading } = useQuery({
-    queryKey: ['group'],
-    queryFn:  getGroup,
+    queryKey: ['group', activeGroupId],
+    queryFn:  () => getGroup(activeGroupId ?? undefined),
   });
 
   const { data: groupMembers, isLoading: membersLoading } = useQuery({
@@ -113,7 +133,7 @@ export default function GroupScreen() {
     queryFn:  getPlayers,
   });
 
-  const { data: currentUser } = useQuery({
+  const { data: _currentUser } = useQuery({
     queryKey: ['currentUser'],
     queryFn:  getCurrentUser,
   });
@@ -303,6 +323,28 @@ export default function GroupScreen() {
               <Text style={styles.billingNudgeBtnText}>Take over</Text>
             </View>
           </TouchableOpacity>
+        )}
+
+        {/* ── Group Switcher ───────────────────────────────────────────── */}
+        {(userGroups?.length ?? 0) > 1 && (
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: spacing.md }}>
+            <View style={{ flexDirection: 'row', gap: spacing.sm, paddingHorizontal: 2 }}>
+              {(userGroups ?? []).map((g: any) => (
+                <TouchableOpacity
+                  key={g.id}
+                  style={[
+                    styles.groupTab,
+                    activeGroupId === g.id && styles.groupTabActive,
+                  ]}
+                  onPress={() => setActiveGroupId(g.id)}
+                >
+                  <Text style={[styles.groupTabText, activeGroupId === g.id && styles.groupTabTextActive]}>
+                    {g.name}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+          </ScrollView>
         )}
 
         {/* ── Group Header ─────────────────────────────────────────────── */}
@@ -1052,6 +1094,16 @@ const styles = StyleSheet.create({
 
   // Manage button (…)
   manageBtn: { padding: 4 },
+
+  // Group switcher tabs
+  groupTab: {
+    paddingHorizontal: spacing.md, paddingVertical: spacing.sm,
+    borderRadius: borderRadius.full, backgroundColor: colors.white,
+    borderWidth: 1.5, borderColor: colors.border,
+  },
+  groupTabActive: { backgroundColor: colors.primary, borderColor: colors.primary },
+  groupTabText: { ...typography.captionBold, color: colors.textSecondary },
+  groupTabTextActive: { color: colors.white },
 
   // Free tier banner
   freeBanner: {
