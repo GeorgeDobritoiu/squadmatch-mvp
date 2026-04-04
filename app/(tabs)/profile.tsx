@@ -14,7 +14,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useRouter } from 'expo-router';
 import { colors, spacing, borderRadius, typography, shadows } from '@/constants/design';
-import { getCurrentUser, getMatches, getPlayerStats } from '@/lib/data';
+import { getCurrentUser, getPlayerStats, getUserGroups } from '@/lib/data';
 import { signOut } from '@/lib/auth';
 
 const POSITIONS = ['Goalkeeper', 'Defender', 'Midfielder', 'Striker', 'Any'];
@@ -67,6 +67,12 @@ export default function ProfileScreen() {
     enabled: !!currentUser?.id,
   });
 
+  const { data: userGroups } = useQuery({
+    queryKey: ['userGroups', currentUser?.id],
+    queryFn: () => getUserGroups(currentUser!.id),
+    enabled: !!currentUser?.id,
+  });
+
   if (isLoading) {
     return (
       <SafeAreaView style={styles.container}>
@@ -112,9 +118,9 @@ export default function ProfileScreen() {
 
           {/* Stats */}
           <View style={styles.statsRow}>
-            <TouchableOpacity style={styles.statItem} onPress={() => currentUser && router.push(`/player/${currentUser.id}`)}>
-              <Text style={styles.statValue}>{stats?.matchesPlayed ?? 0}</Text>
-              <Text style={styles.statLabel}>Matches</Text>
+            <TouchableOpacity style={styles.statItem} onPress={() => router.push('/(tabs)/group')}>
+              <Text style={styles.statValue}>{userGroups?.length ?? 0}</Text>
+              <Text style={styles.statLabel}>Teams</Text>
             </TouchableOpacity>
             <View style={styles.statDivider} />
             <TouchableOpacity style={styles.statItem} onPress={() => currentUser && router.push(`/player/${currentUser.id}`)}>
@@ -137,6 +143,30 @@ export default function ProfileScreen() {
             <Ionicons name="chevron-forward" size={14} color={colors.accent} />
           </TouchableOpacity>
         </View>
+
+        {/* My Teams */}
+        {(userGroups?.length ?? 0) > 0 && (
+          <View style={styles.sectionCard}>
+            <Text style={styles.sectionTitle}>My Teams ({userGroups!.length})</Text>
+            {userGroups!.map((g: any) => (
+              <TouchableOpacity
+                key={g.id}
+                style={styles.teamRow}
+                onPress={() => router.push('/(tabs)/group')}
+                activeOpacity={0.8}
+              >
+                <View style={styles.teamAvatar}>
+                  <Ionicons name="football" size={18} color={colors.white} />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.teamName}>{g.name}</Text>
+                  <Text style={styles.teamMeta}>{g.location ?? ''}{g.location && g.myRole ? ' · ' : ''}{g.myRole}</Text>
+                </View>
+                <Ionicons name="chevron-forward" size={16} color={colors.textTertiary} />
+              </TouchableOpacity>
+            ))}
+          </View>
+        )}
 
         {/* Position & Skill */}
         <View style={styles.sectionCard}>
@@ -232,7 +262,7 @@ export default function ProfileScreen() {
             <View style={{ flex: 1 }}>
               <View style={styles.planNameRow}>
                 <Text style={styles.planName}>Free</Text>
-                <Text style={styles.planPrice}>£0/mo</Text>
+                <Text style={styles.planPrice}>Free</Text>
               </View>
               {['RSVP & attendance tracking', '1 admin per group', 'Basic match history'].map((f) => (
                 <View key={f} style={styles.planFeatureRow}>
@@ -253,7 +283,7 @@ export default function ProfileScreen() {
             <View style={{ flex: 1 }}>
               <View style={styles.planNameRow}>
                 <Text style={[styles.planName, { color: '#2563EB' }]}>Pro</Text>
-                <Text style={[styles.planPrice, { color: '#2563EB' }]}>£6.39/mo</Text>
+                <Text style={[styles.planPrice, { color: '#2563EB' }]}>£9.99/mo</Text>
               </View>
               {['Balanced auto team generation', 'Unlimited admins', 'Player ratings & leaderboard', 'Match reminders'].map((f) => (
                 <View key={f} style={styles.planFeatureRow}>
@@ -274,7 +304,7 @@ export default function ProfileScreen() {
             <View style={{ flex: 1 }}>
               <View style={styles.planNameRow}>
                 <Text style={[styles.planName, { color: '#D97706' }]}>Squad+</Text>
-                <Text style={[styles.planPrice, { color: '#D97706' }]}>£12.99/mo</Text>
+                <Text style={[styles.planPrice, { color: '#D97706' }]}>£14.99/mo</Text>
               </View>
               {['Everything in Pro', 'Payment tracking & split', 'MOTM voting & trophies', 'Advanced stats & history', 'Priority support'].map((f) => (
                 <View key={f} style={styles.planFeatureRow}>
@@ -417,6 +447,11 @@ const styles = StyleSheet.create({
 
   viewProfileBtn: { flexDirection: 'row', alignItems: 'center', marginTop: spacing.md, paddingVertical: spacing.sm, paddingHorizontal: spacing.md, backgroundColor: colors.primaryTint, borderRadius: borderRadius.md },
   viewProfileText: { ...typography.smallBold, color: colors.primary, marginRight: spacing.sm },
+
+  teamRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.md, paddingVertical: spacing.sm, borderBottomWidth: 1, borderBottomColor: colors.backgroundTertiary },
+  teamAvatar: { width: 40, height: 40, borderRadius: 20, backgroundColor: colors.primary, justifyContent: 'center', alignItems: 'center' },
+  teamName: { ...typography.captionBold, color: colors.primary },
+  teamMeta: { ...typography.small, color: colors.textSecondary, textTransform: 'capitalize' },
 
   recordRow: { flexDirection: 'row', gap: spacing.md },
   recordItem: { flexDirection: 'row', alignItems: 'center' },

@@ -86,6 +86,18 @@ export async function getGroup() {
   return data;
 }
 
+export async function getUserGroups(playerId: string) {
+  const { data, error } = await supabase
+    .from('group_members')
+    .select('group_id, role, groups(*)')
+    .eq('player_id', playerId);
+  if (error) return [];
+  return (data ?? []).map((row: any) => ({
+    ...row.groups,
+    myRole: row.role,
+  }));
+}
+
 export interface CreateGroupInput {
   name:        string;
   sport:       string;

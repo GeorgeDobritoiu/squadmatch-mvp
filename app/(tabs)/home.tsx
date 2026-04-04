@@ -522,7 +522,7 @@ export default function HomeScreen() {
               <Text style={s.upgradeNudgeSub}>Balanced teams · Player stats · Reminders</Text>
             </View>
             <View style={s.upgradeNudgeChip}>
-              <Text style={s.upgradeNudgeChipText}>From £6.39/mo</Text>
+              <Text style={s.upgradeNudgeChipText}>From £9.99/mo</Text>
             </View>
           </TouchableOpacity>
         )}
