@@ -148,8 +148,8 @@ export default function ProfileScreen() {
         )}
 
 
-        {/* Create Your Club CTA — admin/owner only */}
-        {isAdmin && <TouchableOpacity style={styles.createClubCard} onPress={() => router.push('/create-group')} activeOpacity={0.88}>
+        {/* Create Your Club CTA */}
+        <TouchableOpacity style={styles.createClubCard} onPress={() => router.push('/create-group')} activeOpacity={0.88}>
           <View style={styles.createClubIcon}>
             <Ionicons name="shield-outline" size={26} color={colors.white} />
           </View>
@@ -158,10 +158,10 @@ export default function ProfileScreen() {
             <Text style={styles.createClubSub}>Create a team, invite players, manage matches</Text>
           </View>
           <Ionicons name="chevron-forward" size={18} color={colors.white} />
-        </TouchableOpacity>}
+        </TouchableOpacity>
 
-        {/* Plans comparison — admin/owner only */}
-        {isAdmin && <>
+        {/* Plans comparison */}
+        <>
         <View style={styles.plansCard}>
           <Text style={styles.sectionTitle}>Plans</Text>
 
@@ -230,7 +230,7 @@ export default function ProfileScreen() {
             <Text style={styles.upgradeBtnText}>See all plans & upgrade →</Text>
           </TouchableOpacity>
         </View>
-        </>}
+        </>
 
         {/* Settings */}
         <View style={styles.sectionCard}>
