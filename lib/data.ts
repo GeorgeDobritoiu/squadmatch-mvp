@@ -85,7 +85,7 @@ export async function getGroup() {
       .select('group_id')
       .eq('player_id', currentPlayer.id)
       .limit(1)
-      .single();
+      .maybeSingle();
     if (membership?.group_id) {
       const { data } = await supabase
         .from('groups')
@@ -96,7 +96,7 @@ export async function getGroup() {
     }
   }
   // Fallback: first group in DB
-  const { data } = await supabase.from('groups').select('*').limit(1).single();
+  const { data } = await supabase.from('groups').select('*').limit(1).maybeSingle();
   return data ?? null;
 }
 
@@ -137,7 +137,6 @@ export async function createGroup(input: CreateGroupInput) {
     name:        input.name,
     location:    input.location ?? '',
     description: input.description ? `${input.description}\n\n${meta}` : meta,
-    owner_id:    currentPlayer.id,
   }).select().single();
   if (error) throw error;
 
