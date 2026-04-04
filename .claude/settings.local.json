@@ -8,7 +8,26 @@
       "Bash(echo \"PID: $!\")",
       "Read(//c/Users/georg/AppData/Local/Temp/claude/c--Users-georg-OneDrive-Documente-Robicon-Digital-Squadplay-app-squadmatch-mvp-main/74fe31a4-a57e-455b-83e2-f4e31f0aa026/tasks/**)",
       "Bash(python3 -c \"import sys,json; d=json.load\\(sys.stdin\\); print\\(json.dumps\\({k:v for k,v in d.get\\('dependencies',{}\\).items\\(\\)}, indent=2\\)\\)\")",
-      "Bash(npm uninstall:*)"
+      "Bash(npm uninstall:*)",
+      "Bash(npm run:*)",
+      "Bash(taskkill /F /IM node.exe)",
+      "Bash(netstat -ano)",
+      "Bash(findstr \":3000 \")",
+      "Bash(taskkill /F /PID 23680)",
+      "Bash(taskkill //F //PID 23680)",
+      "Bash(taskkill //F //PID 2232)",
+      "Bash(taskkill //F //PID 9808)",
+      "Bash(taskkill //F //PID 41688)",
+      "Bash(curl -s \"http://localhost:8082\")",
+      "Bash(curl -s \"http://localhost:8082/_expo/health\")",
+      "Bash(curl -s \"http://localhost:8082/info\")",
+      "Bash(findstr \":8082\")",
+      "Bash(wmic process:*)",
+      "Bash(powershell -Command \"Get-Process -Id 34392 | Select-Object Name, MainWindowTitle\")",
+      "Bash(curl -s \"http://localhost:8082/json\")",
+      "Bash(curl -s -H \"expo-platform: ios\" \"http://localhost:8082/manifest\")",
+      "Bash(npx qrcode-terminal:*)",
+      "Bash(node -e \"const QRCode = require\\('qrcode'\\); QRCode.toString\\('exp://cvp8nr4-anonymous-8082.exp.direct', {type:'terminal', small:true}, \\(err,str\\)=>console.log\\(str\\)\\)\")"
     ]
   }
 }

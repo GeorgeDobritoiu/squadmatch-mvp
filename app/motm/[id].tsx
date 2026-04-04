@@ -525,4 +525,7 @@ const styles = StyleSheet.create({
     borderWidth: 1, borderColor: colors.accent + '44',
   },
   doneText: { ...typography.caption, color: colors.accentDark, flex: 1, lineHeight: 18 },
+
+  emptyState: { alignItems: 'center', justifyContent: 'center', paddingVertical: spacing.xl, gap: spacing.sm },
+  emptyTitle: { ...typography.caption, color: colors.textSecondary, textAlign: 'center' },
 });
