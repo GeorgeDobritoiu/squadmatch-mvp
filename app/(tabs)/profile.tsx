@@ -119,32 +119,6 @@ export default function ProfileScreen() {
             </View>
           )}
 
-          {/* Stats */}
-          <View style={styles.statsRow}>
-            <TouchableOpacity style={styles.statItem} onPress={() => router.push('/(tabs)/group')}>
-              <Text style={styles.statValue}>{userGroups?.length ?? 0}</Text>
-              <Text style={styles.statLabel}>Teams</Text>
-            </TouchableOpacity>
-            <View style={styles.statDivider} />
-            <TouchableOpacity style={styles.statItem} onPress={() => currentUser && router.push(`/player/${currentUser.id}`)}>
-              <Text style={[styles.statValue, { color: '#D97706' }]}>{stats?.motmWins ?? 0}</Text>
-              <Text style={styles.statLabel}>MOTM</Text>
-            </TouchableOpacity>
-            <View style={styles.statDivider} />
-            <TouchableOpacity style={styles.statItem} onPress={() => currentUser && router.push(`/player/${currentUser.id}`)}>
-              <Text style={[styles.statValue, styles.statValueGreen]}>{stats?.attendanceRate ?? 0}%</Text>
-              <Text style={styles.statLabel}>Attend.</Text>
-            </TouchableOpacity>
-          </View>
-
-          {/* View full profile link */}
-          <TouchableOpacity
-            style={styles.viewProfileBtn}
-            onPress={() => currentUser && router.push(`/player/${currentUser.id}`)}
-          >
-            <Text style={styles.viewProfileText}>View full profile</Text>
-            <Ionicons name="chevron-forward" size={14} color={colors.accent} />
-          </TouchableOpacity>
         </View>
 
         {/* My Teams */}
