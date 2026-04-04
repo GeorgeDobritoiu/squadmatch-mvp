@@ -17,16 +17,6 @@ import { colors, spacing, borderRadius, typography, shadows } from '@/constants/
 import { getCurrentUser, getPlayerStats, getUserGroups } from '@/lib/data';
 import { signOut } from '@/lib/auth';
 
-const POSITIONS = ['Goalkeeper', 'Defender', 'Midfielder', 'Striker', 'Any'];
-const SKILL_LEVELS = ['Low', 'Medium', 'High'];
-
-const POSITION_COLOR: Record<string, string> = {
-  Goalkeeper: '#7C3AED',
-  Defender: '#2563EB',
-  Midfielder: '#D97706',
-  Striker: '#DC2626',
-  Any: '#6B7280',
-};
 
 export default function ProfileScreen() {
   const router = useRouter();
@@ -168,75 +158,6 @@ export default function ProfileScreen() {
           </View>
         )}
 
-        {/* Position & Skill */}
-        <View style={styles.sectionCard}>
-          <Text style={styles.sectionTitle}>Playing Details</Text>
-
-          <View style={styles.fieldRow}>
-            <Text style={styles.fieldLabel}>Position</Text>
-            <View style={styles.chipRow}>
-              {POSITIONS.map((pos) => (
-                <View
-                  key={pos}
-                  style={[
-                    styles.chip,
-                    currentUser?.position === pos && {
-                      backgroundColor: POSITION_COLOR[pos] ?? colors.primary,
-                      borderColor: POSITION_COLOR[pos] ?? colors.primary,
-                    },
-                  ]}
-                >
-                  <Text style={[styles.chipText, currentUser?.position === pos && styles.chipTextActive]}>
-                    {pos}
-                  </Text>
-                </View>
-              ))}
-            </View>
-          </View>
-
-          <View style={styles.fieldRow}>
-            <Text style={styles.fieldLabel}>Skill Level</Text>
-            <View style={styles.chipRow}>
-              {SKILL_LEVELS.map((level) => (
-                <View
-                  key={level}
-                  style={[
-                    styles.chip,
-                    currentUser?.skillLevel === level && {
-                      backgroundColor: colors.primary,
-                      borderColor: colors.primary,
-                    },
-                  ]}
-                >
-                  <Text style={[styles.chipText, currentUser?.skillLevel === level && styles.chipTextActive]}>
-                    {level}
-                  </Text>
-                </View>
-              ))}
-            </View>
-          </View>
-
-          {/* W/D/L record if available */}
-          {stats && stats.matchesPlayed > 0 && (
-            <View style={styles.fieldRow}>
-              <Text style={styles.fieldLabel}>Team Record</Text>
-              <View style={styles.recordRow}>
-                <View style={styles.recordItem}>
-                  <View style={[styles.recordDot, { backgroundColor: colors.accentDark }]} />
-                  <Text style={styles.recordValue}>{stats.wins}W</Text>
-                </View>
-                <View style={styles.recordItem}>
-                  <View style={[styles.recordDot, { backgroundColor: '#94A3B8' }]} />
-                  <Text style={styles.recordValue}>{stats.draws}D</Text>
-                </View>
-                <View style={styles.recordItem}>
-                  <View style={[styles.recordDot, { backgroundColor: '#EF4444' }]} />
-                  <Text style={styles.recordValue}>{stats.losses}L</Text>
-                </View>
-              </View>
-            </View>
-          )}
-        </View>
 
         {/* Create Your Club CTA */}
         <TouchableOpacity style={styles.createClubCard} onPress={() => router.push('/create-group')} activeOpacity={0.88}>
