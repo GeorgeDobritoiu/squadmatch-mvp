@@ -36,6 +36,7 @@ import {
   getAttendance,
   getPayments,
   getGroup,
+  getUserGroups,
   getPlayers,
   upsertAttendance,
   markPayment,
@@ -118,7 +119,20 @@ export default function HomeScreen() {
   // ── Data ──────────────────────────────────────────────────────────────────
 
   const { data: currentUser } = useQuery({ queryKey: ['currentUser'], queryFn: getCurrentUser });
-  const { data: group }        = useQuery({ queryKey: ['group'],       queryFn: getGroup });
+
+  // Get all groups this user belongs to, then pick the first one
+  const { data: userGroups } = useQuery({
+    queryKey: ['userGroups', currentUser?.id],
+    queryFn:  () => getUserGroups(currentUser!.id),
+    enabled:  !!currentUser?.id,
+  });
+  const firstGroupId = userGroups?.[0]?.id ?? null;
+
+  const { data: group } = useQuery({
+    queryKey: ['group', firstGroupId],
+    queryFn:  () => getGroup(firstGroupId ?? undefined),
+    enabled:  firstGroupId !== null || userGroups !== undefined,
+  });
   const { data: players }      = useQuery({ queryKey: ['players'],     queryFn: getPlayers });
 
   const { data: match, isLoading: matchLoading } = useQuery({

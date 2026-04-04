@@ -77,26 +77,11 @@ export async function createPlayer(input: CreatePlayerInput) {
 // ── Group ────────────────────────────────────────────────────────────────────
 
 export async function getGroup(groupId?: string) {
-  // If specific groupId requested, fetch it directly
   if (groupId) {
     const { data } = await supabase.from('groups').select('*').eq('id', groupId).maybeSingle();
     return data ?? null;
   }
-  // Otherwise find the first group the current user belongs to
-  const currentPlayer = await getCurrentUser();
-  if (currentPlayer) {
-    const { data: memberships } = await supabase
-      .from('group_members')
-      .select('group_id')
-      .eq('player_id', currentPlayer.id)
-      .limit(1);
-    const gid = memberships?.[0]?.group_id;
-    if (gid) {
-      const { data } = await supabase.from('groups').select('*').eq('id', gid).maybeSingle();
-      if (data) return data;
-    }
-  }
-  // Fallback: first group in DB
+  // Fallback: first group in DB (used only when no groupId provided)
   const { data } = await supabase.from('groups').select('*').limit(1).maybeSingle();
   return data ?? null;
 }
