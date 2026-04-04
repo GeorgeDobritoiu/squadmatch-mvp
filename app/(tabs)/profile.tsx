@@ -208,16 +208,87 @@ export default function ProfileScreen() {
           )}
         </View>
 
-        {/* Upgrade banner */}
-        <TouchableOpacity style={styles.upgradeBanner} onPress={() => router.push('/pricing')} activeOpacity={0.88}>
+        {/* Create Your Club CTA */}
+        <TouchableOpacity style={styles.createClubCard} onPress={() => router.push('/create-group')} activeOpacity={0.88}>
+          <View style={styles.createClubIcon}>
+            <Ionicons name="shield-outline" size={26} color={colors.white} />
+          </View>
           <View style={{ flex: 1 }}>
-            <Text style={styles.upgradeTitle}>Upgrade to PRO 🏆</Text>
-            <Text style={styles.upgradeSub}>Balanced teams · Stats · Reminders</Text>
+            <Text style={styles.createClubTitle}>Start Your Own Club</Text>
+            <Text style={styles.createClubSub}>Create a team, invite players, manage matches</Text>
           </View>
-          <View style={styles.upgradeChip}>
-            <Text style={styles.upgradeChipText}>From £6.39/mo</Text>
-          </View>
+          <Ionicons name="chevron-forward" size={18} color={colors.white} />
         </TouchableOpacity>
+
+        {/* Plans comparison */}
+        <View style={styles.plansCard}>
+          <Text style={styles.sectionTitle}>Plans</Text>
+
+          {/* Free */}
+          <View style={styles.planRow}>
+            <View style={[styles.planIconWrap, { backgroundColor: '#F1F5F9' }]}>
+              <Ionicons name="person-outline" size={18} color="#64748B" />
+            </View>
+            <View style={{ flex: 1 }}>
+              <View style={styles.planNameRow}>
+                <Text style={styles.planName}>Free</Text>
+                <Text style={styles.planPrice}>£0/mo</Text>
+              </View>
+              {['RSVP & attendance tracking', '1 admin per group', 'Basic match history'].map((f) => (
+                <View key={f} style={styles.planFeatureRow}>
+                  <Ionicons name="checkmark" size={13} color="#64748B" />
+                  <Text style={styles.planFeatureText}>{f}</Text>
+                </View>
+              ))}
+            </View>
+          </View>
+
+          <View style={styles.planDivider} />
+
+          {/* Pro */}
+          <View style={styles.planRow}>
+            <View style={[styles.planIconWrap, { backgroundColor: '#EFF6FF' }]}>
+              <Ionicons name="flash" size={18} color="#2563EB" />
+            </View>
+            <View style={{ flex: 1 }}>
+              <View style={styles.planNameRow}>
+                <Text style={[styles.planName, { color: '#2563EB' }]}>Pro</Text>
+                <Text style={[styles.planPrice, { color: '#2563EB' }]}>£6.39/mo</Text>
+              </View>
+              {['Balanced auto team generation', 'Unlimited admins', 'Player ratings & leaderboard', 'Match reminders'].map((f) => (
+                <View key={f} style={styles.planFeatureRow}>
+                  <Ionicons name="checkmark-circle" size={13} color="#2563EB" />
+                  <Text style={[styles.planFeatureText, { color: '#1E40AF' }]}>{f}</Text>
+                </View>
+              ))}
+            </View>
+          </View>
+
+          <View style={styles.planDivider} />
+
+          {/* Squad+ */}
+          <View style={styles.planRow}>
+            <View style={[styles.planIconWrap, { backgroundColor: '#FFFBEB' }]}>
+              <Ionicons name="star" size={18} color="#D97706" />
+            </View>
+            <View style={{ flex: 1 }}>
+              <View style={styles.planNameRow}>
+                <Text style={[styles.planName, { color: '#D97706' }]}>Squad+</Text>
+                <Text style={[styles.planPrice, { color: '#D97706' }]}>£12.99/mo</Text>
+              </View>
+              {['Everything in Pro', 'Payment tracking & split', 'MOTM voting & trophies', 'Advanced stats & history', 'Priority support'].map((f) => (
+                <View key={f} style={styles.planFeatureRow}>
+                  <Ionicons name="star" size={13} color="#D97706" />
+                  <Text style={[styles.planFeatureText, { color: '#92400E' }]}>{f}</Text>
+                </View>
+              ))}
+            </View>
+          </View>
+
+          <TouchableOpacity style={styles.upgradeBtn} onPress={() => router.push('/pricing')} activeOpacity={0.88}>
+            <Text style={styles.upgradeBtnText}>See all plans & upgrade →</Text>
+          </TouchableOpacity>
+        </View>
 
         {/* Settings */}
         <View style={styles.sectionCard}>
@@ -297,16 +368,38 @@ const styles = StyleSheet.create({
   statLabel: { ...typography.tiny, color: colors.textSecondary, marginTop: 2 },
   statDivider: { width: 1, backgroundColor: colors.border },
 
-  upgradeBanner: {
-    flexDirection: 'row', alignItems: 'center',
+  // Create Club CTA
+  createClubCard: {
+    flexDirection: 'row', alignItems: 'center', gap: spacing.md,
     backgroundColor: colors.primary, borderRadius: borderRadius.xl,
-    padding: spacing.md, marginBottom: spacing.md,
-    ...shadows.md,
+    padding: spacing.md, marginBottom: spacing.md, ...shadows.md,
   },
-  upgradeTitle: { ...typography.bodyBold, color: colors.white, marginBottom: 2 },
-  upgradeSub:   { ...typography.small, color: 'rgba(255,255,255,0.7)' },
-  upgradeChip:  { backgroundColor: colors.accent, borderRadius: borderRadius.full, paddingHorizontal: 12, paddingVertical: 6 },
-  upgradeChipText: { ...typography.smallBold, color: colors.white },
+  createClubIcon: {
+    width: 48, height: 48, borderRadius: 24,
+    backgroundColor: 'rgba(255,255,255,0.15)',
+    justifyContent: 'center', alignItems: 'center',
+  },
+  createClubTitle: { ...typography.bodyBold, color: colors.white, marginBottom: 2 },
+  createClubSub:   { ...typography.small, color: 'rgba(255,255,255,0.7)' },
+
+  // Plans card
+  plansCard: {
+    backgroundColor: colors.white, borderRadius: borderRadius.xl,
+    padding: spacing.lg, marginBottom: spacing.md, ...shadows.sm,
+  },
+  planRow:      { flexDirection: 'row', gap: spacing.md, paddingVertical: spacing.sm },
+  planIconWrap: { width: 40, height: 40, borderRadius: borderRadius.lg, justifyContent: 'center', alignItems: 'center', marginTop: 2 },
+  planNameRow:  { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 },
+  planName:     { ...typography.captionBold, color: colors.primary },
+  planPrice:    { ...typography.captionBold, color: colors.textSecondary },
+  planFeatureRow: { flexDirection: 'row', alignItems: 'center', gap: 5, marginBottom: 3 },
+  planFeatureText: { ...typography.small, color: colors.textSecondary },
+  planDivider:  { height: 1, backgroundColor: colors.backgroundTertiary, marginVertical: spacing.sm },
+  upgradeBtn: {
+    marginTop: spacing.md, backgroundColor: colors.primary,
+    borderRadius: borderRadius.lg, paddingVertical: spacing.md, alignItems: 'center',
+  },
+  upgradeBtnText: { ...typography.captionBold, color: colors.white },
   sectionCard: { backgroundColor: colors.white, borderRadius: borderRadius.xl, padding: spacing.lg, marginBottom: spacing.md, ...shadows.sm },
   sectionTitle: { ...typography.captionBold, color: colors.text, textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: spacing.md },
   fieldRow: { marginBottom: spacing.md },
