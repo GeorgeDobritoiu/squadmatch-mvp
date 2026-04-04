@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import {
   View,
   Text,
+  Image,
   TextInput,
   TouchableOpacity,
   ActivityIndicator,
@@ -49,6 +50,15 @@ export default function LoginScreen() {
           contentContainerClassName="px-6 py-12 justify-center min-h-full"
           keyboardShouldPersistTaps="handled"
         >
+          {/* Logo */}
+          <View className="items-center mb-8">
+            <Image
+              source={require('../../assets/images/icon.png')}
+              style={{ width: 96, height: 96, borderRadius: 22 }}
+              resizeMode="contain"
+            />
+          </View>
+
           {/* Header */}
           <View className="mb-10">
             <Text className="text-3xl font-bold text-[#0F2027] mb-2">Welcome back</Text>
