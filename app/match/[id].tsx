@@ -28,6 +28,7 @@ import {
   lockTeams,
   submitScore,
   upsertAttendance,
+  removeGuest,
 } from '@/lib/data';
 import AddGuestModal from '@/components/AddGuestModal';
 import RatingBadge from '@/components/RatingBadge';
@@ -107,6 +108,18 @@ export default function MatchDetailScreen() {
     mutationFn: (status: string) => upsertAttendance(id, currentUser!.id, status),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['attendance', id] }),
   });
+
+  const removeGuestMutation = useMutation({
+    mutationFn: (guestId: string) => removeGuest(guestId),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['guests', id] }),
+  });
+
+  const handleRemoveGuest = (guestId: string, guestName: string) => {
+    Alert.alert('Remove Guest', `Remove ${guestName} from this match?`, [
+      { text: 'Cancel', style: 'cancel' },
+      { text: 'Remove', style: 'destructive', onPress: () => removeGuestMutation.mutate(guestId) },
+    ]);
+  };
 
   const getPlayer = (playerId: string) => players?.find((p) => p.id === playerId);
   const isAdmin = currentUser?.role === 'admin';
@@ -301,6 +314,15 @@ export default function MatchDetailScreen() {
                     <View style={[styles.teamBadge, { backgroundColor: g.team === 'A' ? colors.primaryTint : '#FEE2E2' }]}>
                       <Text style={[styles.teamBadgeText, { color: g.team === 'A' ? colors.primary : '#DC2626' }]}>Team {g.team}</Text>
                     </View>
+                  )}
+                  {isAdmin && match.status !== 'closed' && (
+                    <TouchableOpacity
+                      onPress={() => handleRemoveGuest(g.id, g.name)}
+                      hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                      style={{ marginLeft: 4 }}
+                    >
+                      <Ionicons name="trash-outline" size={18} color="#EF4444" />
+                    </TouchableOpacity>
                   )}
                 </View>
               );

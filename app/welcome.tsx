@@ -7,6 +7,7 @@ import React, { useRef, useState, useCallback } from 'react';
 import {
   View,
   Text,
+  Image,
   StyleSheet,
   TouchableOpacity,
   ScrollView,
@@ -258,44 +259,18 @@ const ILLUSTRATIONS = [IllustrationChaos, IllustrationTeams, IllustrationMOTM];
 // ── Logo ──────────────────────────────────────────────────────────────────────
 function SquadPlayLogo() {
   return (
-    <View style={logo.wrap}>
-      {/* Shield icon */}
-      <View style={logo.shieldWrap}>
-        <Svg width={40} height={44} viewBox="0 0 40 44">
-          <Defs>
-            <LinearGradient id="shieldG" x1="0" y1="0" x2="0" y2="1">
-              <Stop offset="0" stopColor={B.green} />
-              <Stop offset="1" stopColor={B.greenDark} />
-            </LinearGradient>
-          </Defs>
-          {/* Shield body */}
-          <Path
-            d="M20 2 L36 8 L36 22 C36 31 28 39 20 42 C12 39 4 31 4 22 L4 8 Z"
-            fill="url(#shieldG)"
-          />
-          {/* Play triangle inside shield */}
-          <Polygon points="15,16 15,28 29,22" fill={B.navy} fillOpacity={0.85} />
-        </Svg>
-      </View>
-      {/* Wordmark */}
-      <View style={logo.textWrap}>
-        <Text style={logo.word}>
-          <Text style={logo.squad}>Squad</Text>
-          <Text style={logo.play}>Play</Text>
-        </Text>
-      </View>
+    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+      <Image
+        source={require('../assets/images/icon.png')}
+        style={{ width: 48, height: 48 }}
+        resizeMode="contain"
+      />
+      <Text style={{ fontSize: 28, fontWeight: '800', color: B.navy, letterSpacing: -0.5 }}>
+        Squad<Text style={{ color: B.green }}>Play</Text>
+      </Text>
     </View>
   );
 }
-
-const logo = StyleSheet.create({
-  wrap: { flexDirection: 'row', alignItems: 'center', gap: 10 },
-  shieldWrap: { width: 40, height: 44 },
-  textWrap: { justifyContent: 'center' },
-  word: { letterSpacing: -0.5 },
-  squad: { fontSize: 28, fontWeight: '800', color: B.navy, letterSpacing: -0.5 },
-  play:  { fontSize: 28, fontWeight: '800', color: B.green, letterSpacing: -0.5 },
-});
 
 // ── Slide ─────────────────────────────────────────────────────────────────────
 function Slide({ slide, index }: { slide: typeof SLIDES[0]; index: number }) {

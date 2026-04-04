@@ -1,11 +1,11 @@
 {
   "expo": {
-    "name": "blink-expo-starter",
-    "slug": "blink-expo-starter",
+    "name": "SquadPlay",
+    "slug": "squadplay",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
-    "scheme": "blinkexpo",
+    "scheme": "squadplay",
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
     "splash": {
@@ -18,19 +18,24 @@
     ],
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.blink.expostarter"
+      "bundleIdentifier": "app.squadplay.mobile"
     },
     "android": {
       "adaptiveIcon": {
         "foregroundImage": "./assets/images/adaptive-icon.png",
         "backgroundColor": "#EEF2F5"
       },
-      "package": "com.blink.expostarter"
+      "package": "app.squadplay.mobile"
     },
     "web": {
       "bundler": "metro",
-      "output": "single",
-      "favicon": "./assets/images/favicon.png"
+      "output": "static",
+      "favicon": "./assets/images/favicon.png",
+      "themeColor": "#0A1628",
+      "backgroundColor": "#F7F9FB",
+      "name": "SquadPlay",
+      "shortName": "SquadPlay",
+      "description": "Organise your casual sports group — matches, payments, ratings."
     },
     "plugins": [
       "expo-router",

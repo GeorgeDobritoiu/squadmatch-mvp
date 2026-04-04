@@ -222,6 +222,11 @@ export async function addGuest(guest: {
   return data;
 }
 
+export async function removeGuest(guestId: string) {
+  const { error } = await supabase.from('guests').delete().eq('id', guestId);
+  if (error) throw error;
+}
+
 // ── Payments ─────────────────────────────────────────────────────────────────
 
 export async function getPayments(matchId: string) {
