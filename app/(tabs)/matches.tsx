@@ -22,18 +22,24 @@ const STATUS_CONFIG: Record<string, { color: string; bg: string; label: string; 
 
 export default function MatchesScreen() {
   const router = useRouter();
-  const [filter, setFilter] = useState<'all' | 'upcoming' | 'past'>('all');
+  const [filter, setFilter] = useState<'upcoming' | 'past' | 'all'>('upcoming');
 
   const { data: matches, isLoading } = useQuery({
     queryKey: ['matches'],
     queryFn: getMatches,
   });
 
-  const filtered = (matches ?? []).filter((m) => {
-    if (filter === 'upcoming') return m.status === 'open' || m.status === 'full';
-    if (filter === 'past') return m.status === 'closed';
-    return true;
-  });
+  const filtered = (matches ?? [])
+    .filter((m) => {
+      if (filter === 'upcoming') return m.status === 'open' || m.status === 'full';
+      if (filter === 'past') return m.status === 'closed';
+      return true;
+    })
+    .sort((a, b) => {
+      const diff = new Date(a.date).getTime() - new Date(b.date).getTime();
+      // upcoming: soonest first; past & all: most recent first
+      return filter === 'upcoming' ? diff : -diff;
+    });
 
   const formatDate = (date: string) => {
     const d = new Date(date + 'T12:00:00');
@@ -52,7 +58,7 @@ export default function MatchesScreen() {
 
       {/* Filter Tabs */}
       <View style={styles.filterRow}>
-        {(['all', 'upcoming', 'past'] as const).map((f) => (
+        {(['upcoming', 'past', 'all'] as const).map((f) => (
           <TouchableOpacity
             key={f}
             style={[styles.filterTab, filter === f && styles.filterTabActive]}
