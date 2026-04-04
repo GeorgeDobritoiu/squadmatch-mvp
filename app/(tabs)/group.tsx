@@ -135,6 +135,16 @@ export default function GroupScreen() {
   const isOwner    = myRole === 'owner';
   const isAdmin    = myRole === 'admin' || myRole === 'owner';
 
+  const isPaidPlan = group?.subscription_plan === 'pro' || group?.subscription_plan === 'squad_plus';
+  const isFreeTier = !isPaidPlan;
+
+  // On free tier only 1 admin (besides the owner) is allowed
+  const currentAdminCount = useMemo(
+    () => (groupMembers ?? []).filter((m) => m.role === 'admin').length,
+    [groupMembers],
+  );
+  const freeAdminLimitReached = isFreeTier && currentAdminCount >= 1;
+
   // Admins eligible for ownership transfer (not myself)
   const eligibleAdmins = useMemo(
     () => (groupMembers ?? []).filter(
@@ -345,6 +355,19 @@ export default function GroupScreen() {
             <Text style={styles.statLabel}>Frequency</Text>
           </View>
         </View>
+
+        {/* ── Free Tier Banner ─────────────────────────────────────────── */}
+        {isFreeTier && (
+          <TouchableOpacity style={styles.freeBanner} onPress={() => router.push('/pricing')} activeOpacity={0.88}>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.freeBannerTitle}>Free plan · 1 admin max</Text>
+              <Text style={styles.freeBannerSub}>Upgrade to add more admins & unlock features</Text>
+            </View>
+            <View style={styles.freeBannerChip}>
+              <Text style={styles.freeBannerChipText}>Upgrade →</Text>
+            </View>
+          </TouchableOpacity>
+        )}
 
         {/* ── Admin Actions ─────────────────────────────────────────────── */}
         {isAdmin && (
@@ -673,20 +696,28 @@ export default function GroupScreen() {
 
                 {managedMember.role === 'player' && (
                   <TouchableOpacity
-                    style={styles.manageAction}
-                    onPress={() => promoteMutation.mutate(managedMember.id)}
+                    style={[styles.manageAction, freeAdminLimitReached && styles.manageActionDisabled]}
+                    onPress={() => {
+                      if (freeAdminLimitReached) {
+                        showAlert('Upgrade required', 'Free plan allows only 1 admin. Upgrade to add more admins.');
+                        return;
+                      }
+                      promoteMutation.mutate(managedMember.id);
+                    }}
                     disabled={promoteMutation.isPending}
                   >
-                    <View style={[styles.manageActionIcon, { backgroundColor: '#EFF6FF' }]}>
-                      <Ionicons name="shield" size={18} color="#2563EB" />
+                    <View style={[styles.manageActionIcon, { backgroundColor: freeAdminLimitReached ? '#F3F4F6' : '#EFF6FF' }]}>
+                      <Ionicons name="shield" size={18} color={freeAdminLimitReached ? '#9CA3AF' : '#2563EB'} />
                     </View>
                     <View style={{ flex: 1 }}>
-                      <Text style={styles.manageActionTitle}>Promote to Admin</Text>
-                      <Text style={styles.manageActionSub}>Can manage matches, schedule, and members</Text>
+                      <Text style={[styles.manageActionTitle, freeAdminLimitReached && { color: '#9CA3AF' }]}>Promote to Admin</Text>
+                      <Text style={styles.manageActionSub}>
+                        {freeAdminLimitReached ? 'Upgrade plan to add more admins' : 'Can manage matches, schedule, and members'}
+                      </Text>
                     </View>
                     {promoteMutation.isPending
                       ? <ActivityIndicator size="small" color={colors.textSecondary} />
-                      : <Ionicons name="chevron-forward" size={16} color={colors.textTertiary} />}
+                      : <Ionicons name={freeAdminLimitReached ? 'lock-closed' : 'chevron-forward'} size={16} color={colors.textTertiary} />}
                   </TouchableOpacity>
                 )}
 
@@ -1010,6 +1041,24 @@ const styles = StyleSheet.create({
 
   // Manage button (…)
   manageBtn: { padding: 4 },
+
+  // Free tier banner
+  freeBanner: {
+    flexDirection: 'row', alignItems: 'center',
+    backgroundColor: '#F8FAFC', borderRadius: borderRadius.xl,
+    padding: spacing.md, marginBottom: spacing.md,
+    borderWidth: 1.5, borderColor: '#E2E8F0',
+  },
+  freeBannerTitle: { ...typography.captionBold, color: colors.primary },
+  freeBannerSub:   { ...typography.small, color: colors.textSecondary, marginTop: 2 },
+  freeBannerChip:  {
+    backgroundColor: colors.primary, borderRadius: borderRadius.full,
+    paddingHorizontal: 12, paddingVertical: 6, marginLeft: spacing.sm,
+  },
+  freeBannerChipText: { ...typography.tiny, fontWeight: '700', color: colors.white },
+
+  // Manage action disabled state
+  manageActionDisabled: { opacity: 0.6 },
 
   // Transfer ownership shortcut
   transferShortcut: {
