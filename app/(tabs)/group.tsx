@@ -9,10 +9,12 @@ import {
   Modal,
   Alert,
   Platform,
+  Image,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import * as ImagePicker from 'expo-image-picker';
 import { colors, spacing, borderRadius, typography, shadows } from '@/constants/design';
 import {
   getGroup,
@@ -26,6 +28,9 @@ import {
   promoteToAdmin,
   demoteToPlayer,
   takeBillingOwnership,
+  uploadTeamLogo,
+  kickMember,
+  deleteGroup,
   GroupMember,
 } from '@/lib/data';
 import { getRatingColor, multiSnakeDraft, computeRating } from '@/lib/ratings';
@@ -96,8 +101,14 @@ export default function GroupScreen() {
   // ── Billing takeover ──────────────────────────────────────────────────────
   const [billingModal, setBillingModal] = useState(false);
 
+  // ── Delete group ──────────────────────────────────────────────────────────
+  const [deleteModal, setDeleteModal] = useState(false);
+
   // ── Active group selector ─────────────────────────────────────────────────
   const [activeGroupId, setActiveGroupId] = useState<string | null>(null);
+
+  // ── Logo upload ───────────────────────────────────────────────────────────
+  const [uploadingLogo, setUploadingLogo] = useState(false);
 
   // ── Queries ───────────────────────────────────────────────────────────────
 
@@ -157,6 +168,41 @@ export default function GroupScreen() {
 
   const isPaidPlan = group?.subscription_plan === 'pro' || group?.subscription_plan === 'squad_plus';
   const isFreeTier = !isPaidPlan;
+
+  const handlePickLogo = async () => {
+    if (!isAdmin || !group) return;
+    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (status !== 'granted') {
+      if (Platform.OS === 'web') {
+        window.alert('Permission needed\nPlease allow access to your photo library.');
+      } else {
+        Alert.alert('Permission needed', 'Please allow access to your photo library.');
+      }
+      return;
+    }
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ['images'],
+      allowsEditing: true,
+      aspect: [1, 1],
+      quality: 0.8,
+    });
+    if (result.canceled) return;
+    const uri = result.assets[0].uri;
+    try {
+      setUploadingLogo(true);
+      await uploadTeamLogo(group.id, uri);
+      queryClient.invalidateQueries({ queryKey: ['group', group.id] });
+      queryClient.invalidateQueries({ queryKey: ['group'] });
+    } catch (e: any) {
+      if (Platform.OS === 'web') {
+        window.alert('Upload failed\n' + e.message);
+      } else {
+        Alert.alert('Upload failed', e.message);
+      }
+    } finally {
+      setUploadingLogo(false);
+    }
+  };
 
   // On free tier only 1 admin (besides the owner) is allowed
   const currentAdminCount = useMemo(
@@ -240,6 +286,22 @@ export default function GroupScreen() {
     onError:   (err: any) => showAlert('Error', err.message),
   });
 
+  const kickMutation = useMutation({
+    mutationFn: (playerId: string) => kickMember(group!.id, playerId),
+    onSuccess: () => { setManageModal(false); invalidateGroup(); },
+    onError:   (err: any) => showAlert('Error', err.message),
+  });
+
+  const deleteGroupMutation = useMutation({
+    mutationFn: () => deleteGroup(group!.id),
+    onSuccess: () => {
+      setDeleteModal(false);
+      queryClient.invalidateQueries({ queryKey: ['userGroups'] });
+      queryClient.invalidateQueries({ queryKey: ['group'] });
+    },
+    onError: (err: any) => showAlert('Cannot delete', err.message),
+  });
+
   const billingMutation = useMutation({
     mutationFn: () => takeBillingOwnership(group!.id, currentUser!.id),
     onSuccess: () => { setBillingModal(false); invalidateGroup(); },
@@ -249,22 +311,47 @@ export default function GroupScreen() {
   // ── Leave group handler ───────────────────────────────────────────────────
 
   const handleLeavePress = () => {
-    if (!isOwner) {
-      setLeaveModal(true);
+    // Use displayMembers as fallback (covers legacy groups with no group_members rows)
+    const allMembers = (groupMembers && groupMembers.length > 0) ? groupMembers : displayMembers;
+    const otherMembers   = allMembers.filter((m) => m.id !== currentUser?.id);
+    const otherAdmins    = allMembers.filter((m) => (m.role === 'admin' || m.role === 'owner') && m.id !== currentUser?.id);
+    const hasOtherMembers = otherMembers.length > 0;
+
+    // Determine effective admin status — use myRole if available, fall back to players table role
+    const effectiveIsAdmin = isAdmin || currentUser?.role === 'admin' || currentUser?.role === 'owner';
+    const effectiveIsOwner = isOwner || currentUser?.role === 'owner';
+
+    // Owner must transfer ownership before leaving
+    if (effectiveIsOwner) {
+      if (!hasOtherMembers) {
+        // Only the owner left — allow direct leave
+        setLeaveModal(true);
+        return;
+      }
+      if (eligibleAdmins.length === 0 && otherAdmins.length === 0) {
+        showAlert(
+          'Promote someone first',
+          'You need to promote at least one member to Admin before you can leave.',
+        );
+        return;
+      }
+      setTransferStep('pick');
+      setSelectedAdminId(null);
+      setShouldLeaveAfter(true);
+      setTransferModal(true);
       return;
     }
-    if (eligibleAdmins.length === 0) {
+
+    // Admin: block if they are the only admin and there are still other members
+    if (effectiveIsAdmin && otherAdmins.length === 0 && hasOtherMembers) {
       showAlert(
-        'Promote someone first',
-        'You need to promote at least one member to Admin before you can leave.',
+        'You are the only admin',
+        'The squad needs at least one admin. Ask the owner to promote another player to Admin before you leave.',
       );
       return;
     }
-    // Owner: open transfer modal
-    setTransferStep('pick');
-    setSelectedAdminId(null);
-    setShouldLeaveAfter(true);
-    setTransferModal(true);
+
+    setLeaveModal(true);
   };
 
   // ── Team generation (unchanged logic) ────────────────────────────────────
@@ -349,34 +436,50 @@ export default function GroupScreen() {
 
         {/* ── Group Header ─────────────────────────────────────────────── */}
         <View style={styles.groupHeader}>
-          <View style={styles.groupLogoContainer}>
-            <View style={styles.groupLogo}>
-              <Ionicons name="football" size={32} color={colors.white} />
-            </View>
-          </View>
-          <View style={styles.groupInfo}>
-            <Text style={styles.groupName}>{group?.name ?? 'Sunday Warriors FC'}</Text>
+          <TouchableOpacity
+            onPress={isAdmin ? handlePickLogo : undefined}
+            activeOpacity={isAdmin ? 0.8 : 1}
+            style={styles.groupLogoWrapper}
+          >
+            {group?.logo_url ? (
+              <Image source={{ uri: group.logo_url }} style={styles.groupLogo} />
+            ) : (
+              <View style={styles.groupLogo}>
+                <Ionicons name="football" size={36} color={colors.white} />
+              </View>
+            )}
+            {isAdmin && (
+              <View style={styles.logoEditBadge}>
+                {uploadingLogo
+                  ? <ActivityIndicator size="small" color={colors.white} />
+                  : <Ionicons name="camera" size={12} color={colors.white} />
+                }
+              </View>
+            )}
+          </TouchableOpacity>
+          <Text style={styles.groupName}>{group?.name ?? 'Sunday Warriors FC'}</Text>
+          {group?.location ? (
             <View style={styles.groupMeta}>
-              <Ionicons name="location-outline" size={14} color={colors.textSecondary} />
-              <Text style={styles.groupLocation}>{group?.location ?? 'Hackney Marshes'}</Text>
+              <Ionicons name="location-outline" size={13} color={colors.textSecondary} />
+              <Text style={styles.groupLocation}>{group.location}</Text>
             </View>
-            {group?.description ? (
-              <Text style={styles.groupDesc}>{group.description}</Text>
-            ) : null}
-            {/* Plan badge */}
-            <View style={styles.planBadge}>
-              <Ionicons
-                name={group?.subscription_plan === 'squad_plus' ? 'star' : group?.subscription_plan === 'pro' ? 'flash' : 'person'}
-                size={11}
-                color={group?.subscription_plan === 'squad_plus' ? '#D97706' : group?.subscription_plan === 'pro' ? '#2563EB' : '#6B7280'}
-              />
-              <Text style={[
-                styles.planBadgeText,
-                { color: group?.subscription_plan === 'squad_plus' ? '#D97706' : group?.subscription_plan === 'pro' ? '#2563EB' : '#6B7280' }
-              ]}>
-                {group?.subscription_plan === 'squad_plus' ? 'Squad+' : group?.subscription_plan === 'pro' ? 'Pro' : 'Free'}
-              </Text>
-            </View>
+          ) : null}
+          {group?.description ? (
+            <Text style={styles.groupDesc}>{group.description}</Text>
+          ) : null}
+          {/* Plan badge */}
+          <View style={styles.planBadge}>
+            <Ionicons
+              name={group?.subscription_plan === 'squad_plus' ? 'star' : group?.subscription_plan === 'pro' ? 'flash' : 'person'}
+              size={11}
+              color={group?.subscription_plan === 'squad_plus' ? '#D97706' : group?.subscription_plan === 'pro' ? '#2563EB' : '#6B7280'}
+            />
+            <Text style={[
+              styles.planBadgeText,
+              { color: group?.subscription_plan === 'squad_plus' ? '#D97706' : group?.subscription_plan === 'pro' ? '#2563EB' : '#6B7280' }
+            ]}>
+              {group?.subscription_plan === 'squad_plus' ? 'Squad+' : group?.subscription_plan === 'pro' ? 'Pro' : 'Free'}
+            </Text>
           </View>
         </View>
 
@@ -439,6 +542,33 @@ export default function GroupScreen() {
               </View>
               <Ionicons name="chevron-forward" size={18} color={colors.white} />
             </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.inviteBtn}
+              onPress={() => router.push(`/group-invite?groupId=${group?.id}&groupName=${encodeURIComponent(group?.name ?? '')}`)}
+              activeOpacity={0.88}
+            >
+              <View style={styles.inviteBtnIcon}>
+                <Ionicons name="person-add" size={20} color={colors.accent} />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.inviteBtnTitle}>Invite Players</Text>
+                <Text style={styles.inviteBtnSub}>Share a link to join this squad</Text>
+              </View>
+              <Ionicons name="chevron-forward" size={18} color={colors.textTertiary} />
+            </TouchableOpacity>
+
+            {/* Delete group — owner only, only when no other members */}
+            {isOwner && (
+              <TouchableOpacity
+                style={styles.deleteGroupBtn}
+                onPress={() => setDeleteModal(true)}
+                activeOpacity={0.88}
+              >
+                <Ionicons name="trash-outline" size={16} color="#DC2626" />
+                <Text style={styles.deleteGroupBtnText}>Delete Squad</Text>
+              </TouchableOpacity>
+            )}
           </View>
         )}
 
@@ -792,28 +922,109 @@ export default function GroupScreen() {
                         ? <ActivityIndicator size="small" color={colors.textSecondary} />
                         : <Ionicons name="chevron-forward" size={16} color={colors.textTertiary} />}
                     </TouchableOpacity>
-
-                    <TouchableOpacity
-                      style={styles.manageAction}
-                      onPress={() => {
-                        setManageModal(false);
-                        setSelectedAdminId(managedMember.id);
-                        setTransferStep('pick');
-                        setShouldLeaveAfter(false);
-                        setTransferModal(true);
-                      }}
-                    >
-                      <View style={[styles.manageActionIcon, { backgroundColor: '#FFFBEB' }]}>
-                        <Ionicons name="trophy-outline" size={18} color="#D97706" />
-                      </View>
-                      <View style={{ flex: 1 }}>
-                        <Text style={styles.manageActionTitle}>Transfer Ownership</Text>
-                        <Text style={styles.manageActionSub}>Make {managedMember.name} the squad owner</Text>
-                      </View>
-                      <Ionicons name="chevron-forward" size={16} color={colors.textTertiary} />
-                    </TouchableOpacity>
                   </>
                 )}
+
+                {/* Remove from squad — available for any non-owner member */}
+                <TouchableOpacity
+                  style={[styles.manageAction, styles.manageActionDanger]}
+                  onPress={() => {
+                    if (Platform.OS === 'web') {
+                      if (window.confirm(`Remove ${managedMember.name} from the squad?`)) {
+                        kickMutation.mutate(managedMember.id);
+                      }
+                    } else {
+                      Alert.alert(
+                        'Remove from Squad',
+                        `Are you sure you want to remove ${managedMember.name} from ${group?.name}?`,
+                        [
+                          { text: 'Cancel', style: 'cancel' },
+                          { text: 'Remove', style: 'destructive', onPress: () => kickMutation.mutate(managedMember.id) },
+                        ],
+                      );
+                    }
+                  }}
+                  disabled={kickMutation.isPending}
+                >
+                  <View style={[styles.manageActionIcon, { backgroundColor: '#FEE2E2' }]}>
+                    <Ionicons name="person-remove-outline" size={18} color="#DC2626" />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={[styles.manageActionTitle, { color: '#DC2626' }]}>Remove from Squad</Text>
+                    <Text style={styles.manageActionSub}>This player will lose access to the group</Text>
+                  </View>
+                  {kickMutation.isPending
+                    ? <ActivityIndicator size="small" color="#DC2626" />
+                    : <Ionicons name="chevron-forward" size={16} color="#DC2626" />}
+                </TouchableOpacity>
+
+                {managedMember.role === 'admin' && (
+                  <TouchableOpacity
+                    style={styles.manageAction}
+                    onPress={() => {
+                      setManageModal(false);
+                      setSelectedAdminId(managedMember.id);
+                      setTransferStep('pick');
+                      setShouldLeaveAfter(false);
+                      setTransferModal(true);
+                    }}
+                  >
+                    <View style={[styles.manageActionIcon, { backgroundColor: '#FFFBEB' }]}>
+                      <Ionicons name="trophy-outline" size={18} color="#D97706" />
+                    </View>
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.manageActionTitle}>Transfer Ownership</Text>
+                      <Text style={styles.manageActionSub}>Make {managedMember.name} the squad owner</Text>
+                    </View>
+                    <Ionicons name="chevron-forward" size={16} color={colors.textTertiary} />
+                  </TouchableOpacity>
+                )}
+              </>
+            )}
+          </View>
+        </View>
+      </Modal>
+
+      {/* ══════════════════════════════════════════════════════════════════
+          DELETE GROUP MODAL
+      ══════════════════════════════════════════════════════════════════ */}
+      <Modal visible={deleteModal} animationType="fade" transparent>
+        <View style={styles.alertOverlay}>
+          <View style={styles.alertBox}>
+            <View style={[styles.alertIconWrap, { backgroundColor: '#FEE2E2' }]}>
+              <Ionicons name="trash-outline" size={32} color="#DC2626" />
+            </View>
+            <Text style={styles.alertTitle}>Delete {group?.name}?</Text>
+            {displayMembers.filter((m) => m.role !== 'owner').length > 0 ? (
+              <>
+                <Text style={styles.alertSub}>
+                  You must remove all members before deleting the squad.{'\n'}
+                  {displayMembers.filter((m) => m.role !== 'owner').length} member(s) still in the squad.
+                </Text>
+                <TouchableOpacity style={styles.alertCancel} onPress={() => setDeleteModal(false)}>
+                  <Text style={styles.alertCancelText}>OK</Text>
+                </TouchableOpacity>
+              </>
+            ) : (
+              <>
+                <Text style={styles.alertSub}>
+                  This will permanently delete the squad, all match history, and settings. This cannot be undone.
+                </Text>
+                <View style={styles.alertActions}>
+                  <TouchableOpacity style={styles.alertCancel} onPress={() => setDeleteModal(false)}>
+                    <Text style={styles.alertCancelText}>Cancel</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={[styles.alertConfirm, { backgroundColor: '#DC2626' }]}
+                    onPress={() => deleteGroupMutation.mutate()}
+                    disabled={deleteGroupMutation.isPending}
+                  >
+                    {deleteGroupMutation.isPending
+                      ? <ActivityIndicator color={colors.white} size="small" />
+                      : <Text style={styles.alertConfirmText}>Delete</Text>
+                    }
+                  </TouchableOpacity>
+                </View>
               </>
             )}
           </View>
@@ -1020,18 +1231,37 @@ const styles = StyleSheet.create({
   billingNudgeBtnText: { ...typography.tiny, fontWeight: '700', color: colors.white },
 
   // Group header
-  groupHeader: { backgroundColor: colors.white, borderRadius: borderRadius.xl, padding: spacing.lg, marginBottom: spacing.md, ...shadows.sm },
-  groupLogoContainer: { marginBottom: spacing.md },
-  groupLogo: { width: 64, height: 64, borderRadius: borderRadius.xl, backgroundColor: colors.primary, justifyContent: 'center', alignItems: 'center' },
-  groupInfo:     {},
-  groupName:     { ...typography.h3, color: colors.primary },
+  groupHeader: {
+    backgroundColor: colors.white, borderRadius: borderRadius.xl,
+    paddingVertical: spacing.xl, paddingHorizontal: spacing.lg,
+    marginBottom: spacing.md, ...shadows.sm,
+    alignItems: 'center',
+  },
+  groupLogoWrapper: {
+    position: 'relative',
+    marginBottom: spacing.md,
+  },
+  groupLogo: {
+    width: 72, height: 72, borderRadius: 36,
+    backgroundColor: colors.primary,
+    justifyContent: 'center', alignItems: 'center',
+    ...shadows.md,
+  },
+  logoEditBadge: {
+    position: 'absolute', bottom: 0, right: 0,
+    width: 24, height: 24, borderRadius: 12,
+    backgroundColor: colors.accent,
+    justifyContent: 'center', alignItems: 'center',
+    borderWidth: 2, borderColor: colors.white,
+  },
+  groupName:     { ...typography.h3, color: colors.primary, textAlign: 'center' },
   groupMeta:     { flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: spacing.xs },
   groupLocation: { ...typography.caption, color: colors.textSecondary },
-  groupDesc:     { ...typography.caption, color: colors.textSecondary, marginTop: spacing.sm },
+  groupDesc:     { ...typography.caption, color: colors.textSecondary, marginTop: spacing.xs, textAlign: 'center' },
   planBadge: {
     flexDirection: 'row', alignItems: 'center', gap: 4,
-    alignSelf: 'flex-start', marginTop: spacing.sm,
-    paddingHorizontal: 8, paddingVertical: 3,
+    marginTop: spacing.sm,
+    paddingHorizontal: 10, paddingVertical: 4,
     borderRadius: borderRadius.full,
     backgroundColor: colors.backgroundTertiary,
   },
@@ -1118,6 +1348,20 @@ const styles = StyleSheet.create({
     backgroundColor: colors.primary, borderRadius: borderRadius.full,
     paddingHorizontal: 12, paddingVertical: 6, marginLeft: spacing.sm,
   },
+  // Kick / danger action in manage modal
+  manageActionDanger: { borderTopWidth: 1, borderTopColor: '#FEE2E2', marginTop: spacing.sm, paddingTop: spacing.sm },
+
+  // Delete group button
+  deleteGroupBtn: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
+    gap: spacing.sm, marginTop: spacing.md,
+    paddingVertical: spacing.sm,
+    borderRadius: borderRadius.lg,
+    borderWidth: 1.5, borderColor: '#FECACA',
+    backgroundColor: '#FEF2F2',
+  },
+  deleteGroupBtnText: { ...typography.captionBold, color: '#DC2626' },
+
   freeBannerChipText: { ...typography.tiny, fontWeight: '700', color: colors.white },
 
   // Manage action disabled state
@@ -1246,6 +1490,21 @@ const styles = StyleSheet.create({
   },
   createTeamsBtnTitle: { ...typography.captionBold, color: colors.white },
   createTeamsBtnSub:   { ...typography.tiny, color: 'rgba(255,255,255,0.65)', marginTop: 2 },
+
+  // Invite button
+  inviteBtn: {
+    flexDirection: 'row', alignItems: 'center', gap: spacing.md,
+    backgroundColor: colors.white, borderRadius: borderRadius.xl,
+    padding: spacing.md, marginTop: spacing.sm,
+    borderWidth: 1.5, borderColor: colors.accentTint, ...shadows.xs,
+  },
+  inviteBtnIcon: {
+    width: 40, height: 40, borderRadius: borderRadius.lg,
+    backgroundColor: colors.accentTint,
+    justifyContent: 'center', alignItems: 'center',
+  },
+  inviteBtnTitle: { ...typography.captionBold, color: colors.primary },
+  inviteBtnSub:   { ...typography.tiny, color: colors.textSecondary, marginTop: 2 },
 
   // Team count selector
   teamCountRow: { flexDirection: 'row', gap: spacing.md, marginBottom: spacing.md },

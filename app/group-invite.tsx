@@ -26,8 +26,8 @@ export default function GroupInviteScreen() {
   const handleInvite = async () => {
     const inviteLink = `https://squadplay.app/join/${groupId ?? 'squad'}`;
     const message =
-      `Join our group on SquadPlay to manage our matches! ` +
-      `Use this link to sign up: ${inviteLink}`;
+      `Join ${groupName ?? 'our squad'} on SquadPlay! ` +
+      `Tap this link to sign up and join the team: ${inviteLink}`;
 
     try {
       await Share.share(

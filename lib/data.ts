@@ -74,6 +74,54 @@ export async function createPlayer(input: CreatePlayerInput) {
   return data;
 }
 
+// ── Image Uploads ─────────────────────────────────────────────────────────────
+
+/** Upload a player avatar and persist the public URL to their players row. */
+export async function uploadPlayerAvatar(playerId: string, uri: string): Promise<string> {
+  const response = await fetch(uri);
+  const blob = await response.blob();
+  const ext = (uri.split('?')[0].split('.').pop() ?? 'jpg').toLowerCase();
+  const path = `${playerId}.${ext}`;
+
+  const { error } = await supabase.storage
+    .from('avatars')
+    .upload(path, blob, { contentType: blob.type || 'image/jpeg', upsert: true });
+  if (error) throw error;
+
+  const { data: { publicUrl } } = supabase.storage.from('avatars').getPublicUrl(path);
+
+  const { error: updateErr } = await supabase
+    .from('players')
+    .update({ avatar_url: publicUrl })
+    .eq('id', playerId);
+  if (updateErr) throw updateErr;
+
+  return publicUrl;
+}
+
+/** Upload a team logo and persist the public URL to the groups row. */
+export async function uploadTeamLogo(groupId: string, uri: string): Promise<string> {
+  const response = await fetch(uri);
+  const blob = await response.blob();
+  const ext = (uri.split('?')[0].split('.').pop() ?? 'jpg').toLowerCase();
+  const path = `${groupId}.${ext}`;
+
+  const { error } = await supabase.storage
+    .from('team-logos')
+    .upload(path, blob, { contentType: blob.type || 'image/jpeg', upsert: true });
+  if (error) throw error;
+
+  const { data: { publicUrl } } = supabase.storage.from('team-logos').getPublicUrl(path);
+
+  const { error: updateErr } = await supabase
+    .from('groups')
+    .update({ logo_url: publicUrl })
+    .eq('id', groupId);
+  if (updateErr) throw updateErr;
+
+  return publicUrl;
+}
+
 // ── Group ────────────────────────────────────────────────────────────────────
 
 export async function getGroup(groupId?: string) {
@@ -99,7 +147,12 @@ export async function getUserGroups(playerId: string) {
   const { data: allGroups } = await supabase.from('groups').select('*');
   const { data: allMemberships } = await supabase.from('group_members').select('group_id');
   const groupsWithMembers = new Set((allMemberships ?? []).map((m) => m.group_id));
-  const legacyGroups = (allGroups ?? []).filter((g) => !groupsWithMembers.has(g.id));
+  // Only include the single oldest legacy group (groups with no members at all).
+  // Taking just 1 prevents test/duplicate groups from flooding the switcher.
+  const legacyGroups = (allGroups ?? [])
+    .filter((g) => !groupsWithMembers.has(g.id))
+    .sort((a, b) => a.id.localeCompare(b.id))
+    .slice(0, 1);
 
   // Fetch groups the user is explicitly a member of
   const memberGroups = memberGroupIds.length > 0
@@ -311,6 +364,104 @@ export async function markPayment(paymentId: string, status: string, method?: st
     .single();
   if (error) throw error;
   return data;
+}
+
+/**
+ * Finalise a match: record pitch cost + actual player count,
+ * calculate cost per head, create/update payment rows for every
+ * player who attended (status = 'yes') plus guests.
+ */
+export async function finaliseMatch(
+  matchId:       string,
+  pitchCost:     number,
+  actualPlayers: number,
+) {
+  const costPerPlayer = parseFloat((pitchCost / actualPlayers).toFixed(2));
+
+  // 1. Update match row
+  const { error: matchErr } = await supabase
+    .from('matches')
+    .update({
+      pitch_cost:      pitchCost,
+      actual_players:  actualPlayers,
+      cost_per_player: costPerPlayer,
+      status:          'closed',
+    })
+    .eq('id', matchId);
+  if (matchErr) throw matchErr;
+
+  // 2. Fetch confirmed attendees
+  const { data: attendees } = await supabase
+    .from('attendance')
+    .select('player_id')
+    .eq('match_id', matchId)
+    .eq('status', 'yes');
+
+  // 3. Fetch guests
+  const { data: guests } = await supabase
+    .from('guests')
+    .select('id, sponsor_id')
+    .eq('match_id', matchId);
+
+  // 4. Build payment rows for players
+  const playerIds = (attendees ?? []).map((a) => a.player_id);
+  for (const playerId of playerIds) {
+    // Upsert: update if exists, insert if not
+    const { data: existing } = await supabase
+      .from('payments')
+      .select('id')
+      .eq('match_id', matchId)
+      .eq('player_id', playerId)
+      .maybeSingle();
+
+    if (existing) {
+      await supabase
+        .from('payments')
+        .update({ amount: costPerPlayer, status: 'pending' })
+        .eq('id', existing.id);
+    } else {
+      await supabase.from('payments').insert({
+        id:         `pay_${Date.now()}_${playerId}`,
+        match_id:   matchId,
+        player_id:  playerId,
+        amount:     costPerPlayer,
+        status:     'pending',
+      });
+    }
+  }
+
+  // 5. Payment rows for guests (billed to sponsor)
+  for (const guest of guests ?? []) {
+    const { data: existing } = await supabase
+      .from('payments')
+      .select('id')
+      .eq('match_id', matchId)
+      .eq('player_id', guest.sponsor_id)
+      .eq('guest_id', guest.id)
+      .maybeSingle();
+
+    if (!existing) {
+      await supabase.from('payments').insert({
+        id:         `pay_${Date.now()}_g${guest.id}`,
+        match_id:   matchId,
+        player_id:  guest.sponsor_id,
+        guest_id:   guest.id,
+        amount:     costPerPlayer,
+        status:     'pending',
+      });
+    }
+  }
+
+  return { costPerPlayer };
+}
+
+/** Mark a payment reminder as sent for unpaid players. */
+export async function markReminderSent(paymentId: string) {
+  const { error } = await supabase
+    .from('payments')
+    .update({ reminder_sent: true, reminder_sent_at: new Date().toISOString() })
+    .eq('id', paymentId);
+  if (error) throw error;
 }
 
 // ── MOTM Votes ───────────────────────────────────────────────────────────────
@@ -574,6 +725,32 @@ export async function submitScore(matchId: string, scoreA: number, scoreB: numbe
   return data;
 }
 
+// Join a group via invite link (adds current user as player if not already a member)
+export async function joinGroup(groupId: string): Promise<'joined' | 'already_member'> {
+  const currentPlayer = await getCurrentUser();
+  if (!currentPlayer) throw new Error('Not logged in');
+
+  // Check if already a member
+  const { data: existing } = await supabase
+    .from('group_members')
+    .select('id')
+    .eq('group_id', groupId)
+    .eq('player_id', currentPlayer.id)
+    .maybeSingle();
+
+  if (existing) return 'already_member';
+
+  const { error } = await supabase.from('group_members').insert({
+    id:        `mem_${Date.now()}`,
+    group_id:  groupId,
+    player_id: currentPlayer.id,
+    role:      'player',
+    joined_at: new Date().toISOString(),
+  });
+  if (error) throw error;
+  return 'joined';
+}
+
 // ── Group Membership & Ownership ─────────────────────────────────────────────
 
 export type GroupRole = 'owner' | 'admin' | 'player';
@@ -677,6 +854,49 @@ export async function demoteToPlayer(groupId: string, playerId: string) {
     .eq('group_id', groupId)
     .eq('player_id', playerId)
     .eq('role', 'admin');
+  if (error) throw error;
+}
+
+/** Remove a player from a group (admin/owner action). Cannot remove another owner. */
+export async function kickMember(groupId: string, playerId: string) {
+  const { data: membership } = await supabase
+    .from('group_members')
+    .select('role')
+    .eq('group_id', groupId)
+    .eq('player_id', playerId)
+    .maybeSingle();
+
+  if (membership?.role === 'owner') {
+    throw new Error('Cannot remove the group owner.');
+  }
+
+  const { error } = await supabase
+    .from('group_members')
+    .delete()
+    .eq('group_id', groupId)
+    .eq('player_id', playerId);
+  if (error) throw error;
+}
+
+/**
+ * Delete a group entirely.
+ * Guard: only allowed when the only remaining member is the owner (no other players/admins).
+ */
+export async function deleteGroup(groupId: string) {
+  const { data: members } = await supabase
+    .from('group_members')
+    .select('player_id, role')
+    .eq('group_id', groupId);
+
+  const nonOwners = (members ?? []).filter((m) => m.role !== 'owner');
+  if (nonOwners.length > 0) {
+    throw new Error('Remove all members before deleting the group.');
+  }
+
+  // Delete membership rows first
+  await supabase.from('group_members').delete().eq('group_id', groupId);
+  // Delete the group
+  const { error } = await supabase.from('groups').delete().eq('id', groupId);
   if (error) throw error;
 }
 

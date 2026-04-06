@@ -25,11 +25,15 @@ import {
   getCurrentUser,
   getPlayerStats,
   getAllPlayerRatings,
+  getPayments,
   generateTeams,
   lockTeams,
   submitScore,
   upsertAttendance,
   removeGuest,
+  finaliseMatch,
+  markPayment,
+  markReminderSent,
 } from '@/lib/data';
 import AddGuestModal from '@/components/AddGuestModal';
 import RatingBadge from '@/components/RatingBadge';
@@ -42,6 +46,9 @@ export default function MatchDetailScreen() {
   const [scoreB, setScoreB] = useState('');
   const [scoreModalVisible, setScoreModalVisible] = useState(false);
   const [guestModalVisible, setGuestModalVisible] = useState(false);
+  const [finaliseModal, setFinaliseModal] = useState(false);
+  const [pitchCostInput, setPitchCostInput] = useState('60');
+  const [actualPlayersInput, setActualPlayersInput] = useState('');
 
   const { data: match, isLoading: matchLoading } = useQuery({
     queryKey: ['match', id],
@@ -82,6 +89,12 @@ export default function MatchDetailScreen() {
     queryFn: getAllPlayerRatings,
   });
 
+  const { data: payments } = useQuery({
+    queryKey: ['payments', id],
+    queryFn: () => getPayments(id),
+    enabled: !!id,
+  });
+
   const generateMutation = useMutation({
     mutationFn: () => generateTeams(id),
     onSuccess: () => {
@@ -113,6 +126,39 @@ export default function MatchDetailScreen() {
   const removeGuestMutation = useMutation({
     mutationFn: (guestId: string) => removeGuest(guestId),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['guests', id] }),
+  });
+
+  const finaliseMutation = useMutation({
+    mutationFn: () => finaliseMatch(
+      id,
+      parseFloat(pitchCostInput) || 60,
+      parseInt(actualPlayersInput) || yesAttendance.length,
+    ),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['match', id] });
+      queryClient.invalidateQueries({ queryKey: ['matches'] });
+      queryClient.invalidateQueries({ queryKey: ['payments', id] });
+      setFinaliseModal(false);
+    },
+    onError: (e: any) => {
+      if (Platform.OS === 'web') window.alert('Error: ' + e.message);
+      else Alert.alert('Error', e.message);
+    },
+  });
+
+  const markPaidMutation = useMutation({
+    mutationFn: (paymentId: string) => markPayment(paymentId, 'paid'),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['payments', id] }),
+  });
+
+  const markUnpaidMutation = useMutation({
+    mutationFn: (paymentId: string) => markPayment(paymentId, 'pending'),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['payments', id] }),
+  });
+
+  const reminderMutation = useMutation({
+    mutationFn: (paymentId: string) => markReminderSent(paymentId),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['payments', id] }),
   });
 
   const handleRemoveGuest = (guestId: string, guestName: string) => {
@@ -414,28 +460,19 @@ export default function MatchDetailScreen() {
           </View>
         )}
 
-        {/* Post-Match — closed match actions */}
+        {/* Post-Match actions */}
         {match.status === 'closed' && (
           <View style={styles.section}>
-            <TouchableOpacity
-              style={styles.rateBtn}
-              onPress={() => router.push(`/rate/${match.id}`)}
-            >
+            <TouchableOpacity style={styles.rateBtn} onPress={() => router.push(`/rate/${match.id}`)}>
               <Ionicons name="star-outline" size={18} color="#7C3AED" />
               <Text style={styles.rateBtnText}>Rate Players</Text>
             </TouchableOpacity>
-            <TouchableOpacity
-              style={[styles.motmBtn, { marginTop: spacing.sm }]}
-              onPress={() => router.push(`/motm/${match.id}`)}
-            >
+            <TouchableOpacity style={[styles.motmBtn, { marginTop: spacing.sm }]} onPress={() => router.push(`/motm/${match.id}`)}>
               <Ionicons name="trophy-outline" size={18} color="#D97706" />
               <Text style={styles.motmBtnText}>MOTM Voting</Text>
             </TouchableOpacity>
             {isAdmin && (
-              <TouchableOpacity
-                style={[styles.submitScoreBtn, { marginTop: spacing.sm }]}
-                onPress={() => setScoreModalVisible(true)}
-              >
+              <TouchableOpacity style={[styles.submitScoreBtn, { marginTop: spacing.sm }]} onPress={() => setScoreModalVisible(true)}>
                 <Ionicons name="create-outline" size={18} color={colors.white} />
                 <Text style={styles.submitScoreBtnText}>Edit Score</Text>
               </TouchableOpacity>
@@ -447,24 +484,203 @@ export default function MatchDetailScreen() {
         {isAdmin && match.status !== 'closed' && (
           <View style={styles.section}>
             <TouchableOpacity
-              style={styles.submitScoreBtn}
-              onPress={() => setScoreModalVisible(true)}
+              style={styles.finaliseBtn}
+              onPress={() => {
+                setActualPlayersInput(String(yesAttendance.length));
+                setPitchCostInput(match.pitchCost ? String(match.pitchCost) : '60');
+                setFinaliseModal(true);
+              }}
             >
+              <Ionicons name="cash-outline" size={18} color={colors.white} />
+              <Text style={styles.submitScoreBtnText}>Close Match & Split Costs</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={[styles.submitScoreBtn, { marginTop: spacing.sm }]} onPress={() => setScoreModalVisible(true)}>
               <Ionicons name="checkmark-done-outline" size={18} color={colors.white} />
               <Text style={styles.submitScoreBtnText}>Submit Final Score</Text>
             </TouchableOpacity>
-            <TouchableOpacity
-              style={[styles.motmBtn, { marginTop: spacing.sm }]}
-              onPress={() => router.push(`/motm/${match.id}`)}
-            >
+            <TouchableOpacity style={[styles.motmBtn, { marginTop: spacing.sm }]} onPress={() => router.push(`/motm/${match.id}`)}>
               <Ionicons name="trophy-outline" size={18} color="#D97706" />
               <Text style={styles.motmBtnText}>MOTM Voting</Text>
             </TouchableOpacity>
           </View>
         )}
 
+        {/* ── Payments Section (after match is closed) ── */}
+        {match.status === 'closed' && isAdmin && (payments?.length ?? 0) === 0 && (
+          <View style={styles.section}>
+            <TouchableOpacity
+              style={styles.finaliseBtn}
+              onPress={() => {
+                setActualPlayersInput(String(yesAttendance.length));
+                setPitchCostInput(match.pitchCost ? String(match.pitchCost) : '60');
+                setFinaliseModal(true);
+              }}
+            >
+              <Ionicons name="cash-outline" size={18} color={colors.white} />
+              <Text style={styles.submitScoreBtnText}>Calculate & Split Costs</Text>
+            </TouchableOpacity>
+          </View>
+        )}
+
+        {(payments?.length ?? 0) > 0 && (
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>
+              Payments — £{match.pitchCost ?? '?'} pitch · £{match.costPerPlayer?.toFixed(2)} p/p
+            </Text>
+
+            {/* Summary chips */}
+            <View style={styles.paymentSummaryRow}>
+              <View style={[styles.paymentChip, { backgroundColor: '#F0FDF4', borderColor: '#86EFAC' }]}>
+                <Ionicons name="checkmark-circle" size={14} color="#16A34A" />
+                <Text style={[styles.paymentChipText, { color: '#16A34A' }]}>
+                  {(payments ?? []).filter((p) => p.status === 'paid').length} paid
+                </Text>
+              </View>
+              <View style={[styles.paymentChip, { backgroundColor: '#FEF2F2', borderColor: '#FECACA' }]}>
+                <Ionicons name="time-outline" size={14} color="#DC2626" />
+                <Text style={[styles.paymentChipText, { color: '#DC2626' }]}>
+                  {(payments ?? []).filter((p) => p.status === 'pending').length} pending
+                </Text>
+              </View>
+            </View>
+
+            {(payments ?? []).map((payment) => {
+              const player = getPlayer(payment.player_id);
+              const isPaid = payment.status === 'paid';
+              return (
+                <View key={payment.id} style={styles.paymentRow}>
+                  <View style={styles.playerAvatar}>
+                    <Text style={styles.playerAvatarText}>{(player?.name ?? '?').charAt(0)}</Text>
+                  </View>
+                  <View style={styles.playerInfo}>
+                    <Text style={styles.playerName}>{player?.name ?? payment.player_id}</Text>
+                    <Text style={styles.paymentAmount}>£{Number(payment.amount ?? match.costPerPlayer ?? 0).toFixed(2)}</Text>
+                  </View>
+
+                  {isAdmin && (
+                    <View style={styles.paymentActions}>
+                      {/* Paid / Unpaid toggle */}
+                      <TouchableOpacity
+                        style={[styles.paidToggle, isPaid ? styles.paidToggleActive : styles.unpaidToggle]}
+                        onPress={() => isPaid
+                          ? markUnpaidMutation.mutate(payment.id)
+                          : markPaidMutation.mutate(payment.id)
+                        }
+                      >
+                        <Ionicons
+                          name={isPaid ? 'checkmark-circle' : 'ellipse-outline'}
+                          size={16}
+                          color={isPaid ? '#16A34A' : '#6B7280'}
+                        />
+                        <Text style={[styles.paidToggleText, isPaid && styles.paidToggleTextActive]}>
+                          {isPaid ? 'Paid' : 'Mark paid'}
+                        </Text>
+                      </TouchableOpacity>
+
+                      {/* Reminder button — only for unpaid */}
+                      {!isPaid && (
+                        <TouchableOpacity
+                          style={[styles.reminderBtn, payment.reminder_sent && styles.reminderBtnSent]}
+                          onPress={() => {
+                            if (!payment.reminder_sent) {
+                              reminderMutation.mutate(payment.id);
+                              if (Platform.OS === 'web') {
+                                window.alert(`Reminder marked for ${player?.name ?? 'player'}`);
+                              } else {
+                                Alert.alert('Reminder sent', `${player?.name ?? 'Player'} has been notified.`);
+                              }
+                            }
+                          }}
+                        >
+                          <Ionicons
+                            name={payment.reminder_sent ? 'mail' : 'mail-outline'}
+                            size={14}
+                            color={payment.reminder_sent ? '#6B7280' : '#D97706'}
+                          />
+                        </TouchableOpacity>
+                      )}
+                    </View>
+                  )}
+
+                  {/* Player sees their own payment status */}
+                  {!isAdmin && payment.player_id === currentUser?.id && (
+                    <View style={[styles.paidToggle, isPaid ? styles.paidToggleActive : styles.unpaidToggle]}>
+                      <Ionicons name={isPaid ? 'checkmark-circle' : 'time-outline'} size={16} color={isPaid ? '#16A34A' : '#DC2626'} />
+                      <Text style={[styles.paidToggleText, isPaid && styles.paidToggleTextActive]}>
+                        {isPaid ? 'Paid' : 'Owes £' + Number(payment.amount ?? match.costPerPlayer ?? 0).toFixed(2)}
+                      </Text>
+                    </View>
+                  )}
+                </View>
+              );
+            })}
+          </View>
+        )}
+
         <View style={{ height: spacing.xl }} />
       </ScrollView>
+
+      {/* ── Finalise / Cost Split Modal ── */}
+      <Modal visible={finaliseModal} animationType="slide" transparent>
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalSheet}>
+            <View style={styles.modalHandle} />
+            <Text style={styles.modalTitle}>Split Match Costs</Text>
+            <Text style={styles.modalSub}>Enter the actual pitch cost and the number of players who showed up. The app will divide the cost equally.</Text>
+
+            <View style={styles.finaliseInputRow}>
+              <View style={styles.finaliseInputBlock}>
+                <Text style={styles.finaliseInputLabel}>Pitch Cost (£)</Text>
+                <TextInput
+                  style={styles.finaliseInput}
+                  value={pitchCostInput}
+                  onChangeText={setPitchCostInput}
+                  keyboardType="decimal-pad"
+                  placeholder="60"
+                />
+              </View>
+              <View style={styles.finaliseInputBlock}>
+                <Text style={styles.finaliseInputLabel}>Players Present</Text>
+                <TextInput
+                  style={styles.finaliseInput}
+                  value={actualPlayersInput}
+                  onChangeText={setActualPlayersInput}
+                  keyboardType="number-pad"
+                  placeholder={String(yesAttendance.length)}
+                />
+              </View>
+            </View>
+
+            {/* Live preview */}
+            {pitchCostInput && actualPlayersInput && Number(actualPlayersInput) > 0 && (
+              <View style={styles.costPreview}>
+                <Text style={styles.costPreviewLabel}>Cost per player</Text>
+                <Text style={styles.costPreviewValue}>
+                  £{(parseFloat(pitchCostInput) / parseInt(actualPlayersInput)).toFixed(2)}
+                </Text>
+              </View>
+            )}
+
+            <TouchableOpacity
+              style={[styles.submitScoreBtn, { marginTop: spacing.lg }]}
+              onPress={() => finaliseMutation.mutate()}
+              disabled={finaliseMutation.isPending}
+            >
+              {finaliseMutation.isPending
+                ? <ActivityIndicator color={colors.white} />
+                : <>
+                    <Ionicons name="cash-outline" size={18} color={colors.white} />
+                    <Text style={styles.submitScoreBtnText}>Calculate & Notify Players</Text>
+                  </>
+              }
+            </TouchableOpacity>
+
+            <TouchableOpacity style={[styles.motmBtn, { marginTop: spacing.sm }]} onPress={() => setFinaliseModal(false)}>
+              <Text style={styles.motmBtnText}>Cancel</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
 
       {/* Score Modal */}
       <Modal visible={scoreModalVisible} animationType="slide" transparent>
@@ -624,4 +840,60 @@ const styles = StyleSheet.create({
   playerStatValue: { ...typography.h4, color: colors.primary },
   playerStatLabel: { ...typography.tiny, color: colors.textSecondary },
   playerStatDivider: { width: 1, height: 36, backgroundColor: colors.border },
+
+  // Finalise / payments
+  finaliseBtn: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
+    gap: spacing.sm, paddingVertical: spacing.md, borderRadius: borderRadius.lg,
+    backgroundColor: '#16A34A', marginBottom: spacing.sm,
+  },
+  modalSub: { ...typography.caption, color: colors.textSecondary, marginBottom: spacing.lg, lineHeight: 20 },
+  finaliseInputRow: { flexDirection: 'row', gap: spacing.md, marginBottom: spacing.md },
+  finaliseInputBlock: { flex: 1, alignItems: 'center' },
+  finaliseInputLabel: { ...typography.smallBold, color: colors.textSecondary, marginBottom: spacing.sm },
+  finaliseInput: {
+    width: '100%', height: 56,
+    borderWidth: 2, borderColor: colors.border, borderRadius: borderRadius.xl,
+    textAlign: 'center', fontSize: 22, fontWeight: '700', color: colors.primary,
+  },
+  costPreview: {
+    backgroundColor: '#F0FDF4', borderRadius: borderRadius.xl,
+    padding: spacing.md, alignItems: 'center', marginBottom: spacing.sm,
+    borderWidth: 1.5, borderColor: '#86EFAC',
+  },
+  costPreviewLabel: { ...typography.small, color: '#16A34A' },
+  costPreviewValue: { ...typography.h2, color: '#16A34A', marginTop: 2 },
+
+  paymentSummaryRow: { flexDirection: 'row', gap: spacing.sm, marginBottom: spacing.md },
+  paymentChip: {
+    flexDirection: 'row', alignItems: 'center', gap: 4,
+    paddingHorizontal: spacing.sm, paddingVertical: 5,
+    borderRadius: borderRadius.full, borderWidth: 1.5,
+  },
+  paymentChipText: { ...typography.tiny, fontWeight: '700' },
+
+  paymentRow: {
+    backgroundColor: colors.white, borderRadius: borderRadius.lg,
+    padding: spacing.md, flexDirection: 'row', alignItems: 'center',
+    gap: spacing.sm, marginBottom: spacing.sm, ...shadows.xs,
+    borderWidth: 1, borderColor: colors.border,
+  },
+  paymentAmount: { ...typography.smallBold, color: '#16A34A', marginTop: 2 },
+  paymentActions: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
+  paidToggle: {
+    flexDirection: 'row', alignItems: 'center', gap: 4,
+    paddingHorizontal: 10, paddingVertical: 5,
+    borderRadius: borderRadius.full, borderWidth: 1.5, borderColor: colors.border,
+    backgroundColor: colors.backgroundTertiary,
+  },
+  paidToggleActive: { backgroundColor: '#F0FDF4', borderColor: '#86EFAC' },
+  unpaidToggle:     { backgroundColor: '#FEF2F2', borderColor: '#FECACA' },
+  paidToggleText:   { ...typography.tiny, fontWeight: '700', color: '#6B7280' },
+  paidToggleTextActive: { color: '#16A34A' },
+  reminderBtn: {
+    width: 32, height: 32, borderRadius: 16,
+    backgroundColor: '#FFFBEB', borderWidth: 1.5, borderColor: '#FDE68A',
+    justifyContent: 'center', alignItems: 'center',
+  },
+  reminderBtnSent: { backgroundColor: colors.backgroundTertiary, borderColor: colors.border },
 });

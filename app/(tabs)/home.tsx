@@ -551,6 +551,22 @@ export default function HomeScreen() {
                 </TouchableOpacity>
               ))}
             </View>
+
+            {/* Invite Players banner */}
+            <TouchableOpacity
+              style={s.inviteBanner}
+              onPress={() => router.push(`/group-invite?groupId=${resolvedGroupId ?? ''}&groupName=${encodeURIComponent(group?.name ?? '')}`)}
+              activeOpacity={0.88}
+            >
+              <View style={s.inviteBannerIcon}>
+                <Ionicons name="person-add" size={20} color={colors.accent} />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={s.inviteBannerTitle}>Invite Players</Text>
+                <Text style={s.inviteBannerSub}>Share a link so players can join {group?.name ?? 'your squad'}</Text>
+              </View>
+              <Ionicons name="share-social-outline" size={18} color={colors.accent} />
+            </TouchableOpacity>
           </View>
         )}
 
@@ -787,6 +803,23 @@ const s = StyleSheet.create({
   },
   adminBtnIcon:  { marginBottom: 2 },
   adminBtnLabel: { fontSize: 11, fontWeight: '700' },
+
+  // Invite banner
+  inviteBanner: {
+    flexDirection: 'row', alignItems: 'center', gap: spacing.md,
+    backgroundColor: colors.accentTint,
+    borderRadius: borderRadius.xl,
+    padding: spacing.md, marginTop: spacing.sm,
+    borderWidth: 1.5, borderColor: colors.accent + '55',
+    ...shadows.xs,
+  },
+  inviteBannerIcon: {
+    width: 40, height: 40, borderRadius: borderRadius.lg,
+    backgroundColor: colors.white,
+    justifyContent: 'center', alignItems: 'center',
+  },
+  inviteBannerTitle: { ...typography.captionBold, color: colors.accentDark },
+  inviteBannerSub:   { ...typography.tiny, color: colors.accentDark + 'AA', marginTop: 2 },
 
   // ── Quick actions ─────────────────────────────────────────────────────────
   quickRow: {

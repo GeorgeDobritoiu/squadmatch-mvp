@@ -11,10 +11,7 @@
       }
     },
     "preview": {
-      "distribution": "internal",
-      "ios": {
-        "simulator": false
-      }
+      "distribution": "internal"
     },
     "production": {
       "autoIncrement": true
@@ -24,4 +21,3 @@
     "production": {}
   }
 }
-

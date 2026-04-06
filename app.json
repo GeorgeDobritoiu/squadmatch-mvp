@@ -29,7 +29,7 @@
     },
     "web": {
       "bundler": "metro",
-      "output": "static",
+      "output": "server",
       "favicon": "./assets/images/favicon.png",
       "themeColor": "#0A1628",
       "backgroundColor": "#F7F9FB",
@@ -53,8 +53,9 @@
         "origin": false
       },
       "eas": {
-        "projectId": "your-project-id-here"
+        "projectId": "dfa1ee39-cbf3-475c-9dc9-5ecaad8e253a"
       }
-    }
+    },
+    "owner": "squadplay2"
   }
 }

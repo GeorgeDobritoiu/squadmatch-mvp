@@ -8,19 +8,55 @@ import {
   ActivityIndicator,
   Alert,
   Platform,
+  Image,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useRouter } from 'expo-router';
+import * as ImagePicker from 'expo-image-picker';
 import { colors, spacing, borderRadius, typography, shadows } from '@/constants/design';
-import { getCurrentUser, getPlayerStats, getUserGroups, getGroup } from '@/lib/data';
+import { getCurrentUser, getPlayerStats, getUserGroups, getGroup, uploadPlayerAvatar } from '@/lib/data';
 import { signOut } from '@/lib/auth';
 
 
 export default function ProfileScreen() {
   const router = useRouter();
   const queryClient = useQueryClient();
+  const [uploadingAvatar, setUploadingAvatar] = useState(false);
+
+  const handlePickAvatar = async () => {
+    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (status !== 'granted') {
+      if (Platform.OS === 'web') {
+        window.alert('Permission needed\nPlease allow access to your photo library.');
+      } else {
+        Alert.alert('Permission needed', 'Please allow access to your photo library.');
+      }
+      return;
+    }
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ['images'],
+      allowsEditing: true,
+      aspect: [1, 1],
+      quality: 0.8,
+    });
+    if (result.canceled || !currentUser) return;
+    const uri = result.assets[0].uri;
+    try {
+      setUploadingAvatar(true);
+      await uploadPlayerAvatar(currentUser.id, uri);
+      queryClient.invalidateQueries({ queryKey: ['currentUser'] });
+    } catch (e: any) {
+      if (Platform.OS === 'web') {
+        window.alert('Upload failed\n' + e.message);
+      } else {
+        Alert.alert('Upload failed', e.message);
+      }
+    } finally {
+      setUploadingAvatar(false);
+    }
+  };
 
   const doSignOut = async () => {
     queryClient.clear();
@@ -66,7 +102,7 @@ export default function ProfileScreen() {
   // Fallback: if no group_members rows found, show the group from getGroup()
   const { data: fallbackGroup } = useQuery({
     queryKey: ['group'],
-    queryFn: getGroup,
+    queryFn: () => getGroup(),
     enabled: (userGroupsRaw?.length ?? 0) === 0,
   });
 
@@ -98,18 +134,26 @@ export default function ProfileScreen() {
 
         {/* Profile Card */}
         <View style={styles.profileCard}>
-          <TouchableOpacity
-            style={styles.avatarWrapper}
-            onPress={() => currentUser && router.push(`/player/${currentUser.id}`)}
-            activeOpacity={0.85}
-          >
-            <View style={styles.avatar}>
-              <Text style={styles.avatarInitial}>{(currentUser?.name ?? 'P').charAt(0)}</Text>
-            </View>
-            <TouchableOpacity style={styles.avatarEditBtn}>
-              <Ionicons name="camera" size={14} color={colors.white} />
+          <View style={styles.avatarWrapper}>
+            <TouchableOpacity
+              onPress={() => currentUser && router.push(`/player/${currentUser.id}`)}
+              activeOpacity={0.85}
+            >
+              {currentUser?.avatar_url ? (
+                <Image source={{ uri: currentUser.avatar_url }} style={styles.avatar} />
+              ) : (
+                <View style={styles.avatar}>
+                  <Text style={styles.avatarInitial}>{(currentUser?.name ?? 'P').charAt(0)}</Text>
+                </View>
+              )}
             </TouchableOpacity>
-          </TouchableOpacity>
+            <TouchableOpacity style={styles.avatarEditBtn} onPress={handlePickAvatar} disabled={uploadingAvatar}>
+              {uploadingAvatar
+                ? <ActivityIndicator size="small" color={colors.white} />
+                : <Ionicons name="camera" size={14} color={colors.white} />
+              }
+            </TouchableOpacity>
+          </View>
 
           <TouchableOpacity onPress={() => currentUser && router.push(`/player/${currentUser.id}`)}>
             <Text style={styles.profileName}>{currentUser?.name ?? 'Player'}</Text>
