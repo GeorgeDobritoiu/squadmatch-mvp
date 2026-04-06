@@ -301,7 +301,7 @@ export default function ProfileScreen() {
               </View>
               <View style={styles.planMemberBadge}>
                 <Ionicons name="people-outline" size={11} color="#D97706" />
-                <Text style={[styles.planMemberText, { color: '#D97706' }]}>Up to 40 members</Text>
+                <Text style={[styles.planMemberText, { color: '#D97706' }]}>Up to 60 members</Text>
               </View>
               {[
                 'Everything in PRO',
