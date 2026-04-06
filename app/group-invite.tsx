@@ -15,6 +15,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { colors, spacing, borderRadius, typography, shadows } from '@/constants/design';
+import { buildInviteLink } from '@/constants/urls';
 
 export default function GroupInviteScreen() {
   const { groupName, groupId } = useLocalSearchParams<{
@@ -24,7 +25,7 @@ export default function GroupInviteScreen() {
   const router = useRouter();
 
   const handleInvite = async () => {
-    const inviteLink = `https://squadplay.app/join/${groupId ?? 'squad'}`;
+    const inviteLink = buildInviteLink(groupId ?? 'squad', groupName ?? '');
     const message =
       `Join ${groupName ?? 'our squad'} on SquadPlay! ` +
       `Tap this link to sign up and join the team: ${inviteLink}`;
