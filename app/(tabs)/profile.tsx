@@ -205,45 +205,44 @@ export default function ProfileScreen() {
         </TouchableOpacity>
 
         {/* Plans comparison */}
-        <>
         <View style={styles.plansCard}>
           <Text style={styles.sectionTitle}>Plans</Text>
 
-          {/* Free */}
+          {/* FREE */}
           <View style={styles.planRow}>
             <View style={[styles.planIconWrap, { backgroundColor: '#F1F5F9' }]}>
-              <Ionicons name="person-outline" size={18} color="#64748B" />
+              <Text style={{ fontSize: 18 }}>🌐</Text>
             </View>
             <View style={{ flex: 1 }}>
               <View style={styles.planNameRow}>
                 <Text style={styles.planName}>Free</Text>
                 <Text style={styles.planPrice}>Free</Text>
               </View>
-              {['RSVP & attendance tracking', '1 admin per group', 'Basic match history'].map((f) => (
+              <View style={styles.planMemberBadge}>
+                <Ionicons name="people-outline" size={11} color="#64748B" />
+                <Text style={styles.planMemberText}>Up to 14 members</Text>
+              </View>
+              {[
+                'Create & schedule matches',
+                'YES / NO / MAYBE attendance',
+                'Cost split per player',
+                'MOTM voting',
+                'Random teams',
+              ].map((f) => (
                 <View key={f} style={styles.planFeatureRow}>
                   <Ionicons name="checkmark" size={13} color="#64748B" />
                   <Text style={styles.planFeatureText}>{f}</Text>
                 </View>
               ))}
-            </View>
-          </View>
-
-          <View style={styles.planDivider} />
-
-          {/* Pro */}
-          <View style={styles.planRow}>
-            <View style={[styles.planIconWrap, { backgroundColor: '#EFF6FF' }]}>
-              <Ionicons name="flash" size={18} color="#2563EB" />
-            </View>
-            <View style={{ flex: 1 }}>
-              <View style={styles.planNameRow}>
-                <Text style={[styles.planName, { color: '#2563EB' }]}>Pro</Text>
-                <Text style={[styles.planPrice, { color: '#2563EB' }]}>£9.99/mo</Text>
-              </View>
-              {['Balanced auto team generation', 'Unlimited admins', 'Player ratings & leaderboard', 'Match reminders'].map((f) => (
+              {[
+                'Balanced teams',
+                'Player rating system',
+                'Payment reminders',
+                'Match history & stats',
+              ].map((f) => (
                 <View key={f} style={styles.planFeatureRow}>
-                  <Ionicons name="checkmark-circle" size={13} color="#2563EB" />
-                  <Text style={[styles.planFeatureText, { color: '#1E40AF' }]}>{f}</Text>
+                  <Ionicons name="close" size={13} color="#CBD5E1" />
+                  <Text style={[styles.planFeatureText, { color: '#CBD5E1' }]}>{f}</Text>
                 </View>
               ))}
             </View>
@@ -251,17 +250,67 @@ export default function ProfileScreen() {
 
           <View style={styles.planDivider} />
 
-          {/* Squad+ */}
+          {/* PRO */}
           <View style={styles.planRow}>
-            <View style={[styles.planIconWrap, { backgroundColor: '#FFFBEB' }]}>
-              <Ionicons name="star" size={18} color="#D97706" />
+            <View style={[styles.planIconWrap, { backgroundColor: '#F0FDF4' }]}>
+              <Text style={{ fontSize: 18 }}>🏆</Text>
             </View>
             <View style={{ flex: 1 }}>
               <View style={styles.planNameRow}>
-                <Text style={[styles.planName, { color: '#D97706' }]}>Squad+</Text>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                  <Text style={[styles.planName, { color: '#16A34A' }]}>PRO</Text>
+                  <View style={styles.bestValueBadge}>
+                    <Text style={styles.bestValueText}>BEST VALUE</Text>
+                  </View>
+                </View>
+                <Text style={[styles.planPrice, { color: '#16A34A' }]}>£9.99/mo</Text>
+              </View>
+              <View style={styles.planMemberBadge}>
+                <Ionicons name="people-outline" size={11} color="#16A34A" />
+                <Text style={[styles.planMemberText, { color: '#16A34A' }]}>Up to 21 members</Text>
+              </View>
+              {[
+                'Everything in FREE',
+                'Balanced teams (fair every game)',
+                'Player rating system',
+                'Payment reminders',
+                'No-show tracking',
+                'Match history & player stats',
+                'WhatsApp team sharing',
+                'Automatic waitlist',
+              ].map((f) => (
+                <View key={f} style={styles.planFeatureRow}>
+                  <Ionicons name="checkmark-circle" size={13} color="#16A34A" />
+                  <Text style={[styles.planFeatureText, { color: '#15803D' }]}>{f}</Text>
+                </View>
+              ))}
+            </View>
+          </View>
+
+          <View style={styles.planDivider} />
+
+          {/* SQUAD+ */}
+          <View style={styles.planRow}>
+            <View style={[styles.planIconWrap, { backgroundColor: '#FFFBEB' }]}>
+              <Text style={{ fontSize: 18 }}>🌟</Text>
+            </View>
+            <View style={{ flex: 1 }}>
+              <View style={styles.planNameRow}>
+                <Text style={[styles.planName, { color: '#D97706' }]}>SQUAD+</Text>
                 <Text style={[styles.planPrice, { color: '#D97706' }]}>£14.99/mo</Text>
               </View>
-              {['Everything in Pro', 'Payment tracking & split', 'MOTM voting & trophies', 'Advanced stats & history', 'Priority support'].map((f) => (
+              <View style={styles.planMemberBadge}>
+                <Ionicons name="people-outline" size={11} color="#D97706" />
+                <Text style={[styles.planMemberText, { color: '#D97706' }]}>Up to 40 members</Text>
+              </View>
+              {[
+                'Everything in PRO',
+                'Multiple admins',
+                'Recurring matches',
+                'Season leaderboard',
+                'Advanced ratings',
+                'Payment export (CSV)',
+              ].map((f) => (
                 <View key={f} style={styles.planFeatureRow}>
                   <Ionicons name="star" size={13} color="#D97706" />
                   <Text style={[styles.planFeatureText, { color: '#92400E' }]}>{f}</Text>
@@ -274,7 +323,6 @@ export default function ProfileScreen() {
             <Text style={styles.upgradeBtnText}>See all plans & upgrade →</Text>
           </TouchableOpacity>
         </View>
-        </>
 
         {/* Settings */}
         <View style={styles.sectionCard}>
@@ -381,6 +429,10 @@ const styles = StyleSheet.create({
   planFeatureRow: { flexDirection: 'row', alignItems: 'center', gap: 5, marginBottom: 3 },
   planFeatureText: { ...typography.small, color: colors.textSecondary },
   planDivider:  { height: 1, backgroundColor: colors.backgroundTertiary, marginVertical: spacing.sm },
+  planMemberBadge: { flexDirection: 'row', alignItems: 'center', gap: 4, marginBottom: 6 },
+  planMemberText:  { ...typography.small, color: '#64748B', fontWeight: '600' } as any,
+  bestValueBadge: { backgroundColor: '#16A34A', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4 },
+  bestValueText:  { fontSize: 9, fontWeight: '800', color: '#FFFFFF', letterSpacing: 0.5 } as any,
   upgradeBtn: {
     marginTop: spacing.md, backgroundColor: colors.primary,
     borderRadius: borderRadius.lg, paddingVertical: spacing.md, alignItems: 'center',
