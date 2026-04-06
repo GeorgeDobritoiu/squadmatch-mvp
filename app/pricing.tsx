@@ -77,7 +77,7 @@ const PLANS = [
     subtitle: 'Built for larger groups and regular players',
     monthlyPrice: 14.99,
     yearlyPrice:  9.59,
-    priceNote:    'Best for groups over 20 players',
+    priceNote:    'Best for groups over 40 players',
     savingsNote:  'Save £64 per year',
     limit:    'Up to 60 members',
     limitIcon:'people' as const,
