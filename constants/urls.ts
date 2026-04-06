@@ -6,8 +6,9 @@ export const APP_BASE_URL = 'https://squadplay--squadplay.expo.app';
 
 /**
  * Generates a shareable invite link for a group.
- * Format: https://squadplay--squadplay.expo.app/group-invite?groupId=ID&groupName=NAME
+ * Recipients land on /join/[groupId] — the sign-up + join flow for new members.
+ * Format: https://squadplay--squadplay.expo.app/join/GROUP_ID
  */
 export function buildInviteLink(groupId: string, groupName: string): string {
-  return `${APP_BASE_URL}/group-invite?groupId=${groupId}&groupName=${encodeURIComponent(groupName)}`;
+  return `${APP_BASE_URL}/join/${groupId}`;
 }
