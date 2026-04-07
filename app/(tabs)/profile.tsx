@@ -241,7 +241,9 @@ export default function ProfileScreen() {
                 'Match history & stats',
               ].map((f) => (
                 <View key={f} style={styles.planFeatureRow}>
-                  <Ionicons name="close" size={13} color="#CBD5E1" />
+                  <View style={styles.planLockIcon}>
+                    <Ionicons name="lock-closed" size={9} color="#94A3B8" />
+                  </View>
                   <Text style={[styles.planFeatureText, { color: '#CBD5E1' }]}>{f}</Text>
                 </View>
               ))}
@@ -427,6 +429,11 @@ const styles = StyleSheet.create({
   planName:     { ...typography.captionBold, color: colors.primary },
   planPrice:    { ...typography.captionBold, color: colors.textSecondary },
   planFeatureRow: { flexDirection: 'row', alignItems: 'center', gap: 5, marginBottom: 3 },
+  planLockIcon: {
+    width: 16, height: 16, borderRadius: 8,
+    backgroundColor: '#F1F5F9', borderWidth: 1, borderColor: '#E2E8F0',
+    justifyContent: 'center', alignItems: 'center',
+  },
   planFeatureText: { ...typography.small, color: colors.textSecondary },
   planDivider:  { height: 1, backgroundColor: colors.backgroundTertiary, marginVertical: spacing.sm },
   planMemberBadge: { flexDirection: 'row', alignItems: 'center', gap: 4, marginBottom: 6 },

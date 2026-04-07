@@ -236,11 +236,11 @@ export default function PricingScreen() {
                       s.featureIcon,
                       f.included
                         ? (plan.highlighted ? s.featureIconGreen : s.featureIconMuted)
-                        : s.featureIconCross,
+                        : s.featureIconLocked,
                     ]}>
                       <Ionicons
-                        name={f.included ? 'checkmark' : 'close'}
-                        size={11}
+                        name={f.included ? 'checkmark' : 'lock-closed'}
+                        size={f.included ? 11 : 10}
                         color={f.included ? (plan.highlighted ? '#fff' : '#16A34A') : '#94A3B8'}
                       />
                     </View>
@@ -471,7 +471,8 @@ const s = StyleSheet.create({
   },
   featureIconGreen: { backgroundColor: GREEN },
   featureIconMuted: { backgroundColor: GREEN_TINT, borderWidth: 1, borderColor: GREEN_BORDER },
-  featureIconCross: { backgroundColor: '#F1F5F9' },
+  featureIconCross:  { backgroundColor: '#F1F5F9' },
+  featureIconLocked: { backgroundColor: '#F1F5F9', borderWidth: 1, borderColor: '#E2E8F0' },
   featureText:      { flex: 1, fontSize: 14, color: NAVY, fontWeight: '500' },
   featureTextMuted: { color: '#94A3B8' },
 
