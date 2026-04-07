@@ -202,6 +202,11 @@ export default function PricingScreen() {
             (currentPlan === 'squad_plus' && planId !== 'squad_plus') ||
             (currentPlan === 'pro'        && planId === 'free')
           );
+          const ctaLabel = isActive
+            ? 'Current Plan'
+            : isDowngrade
+              ? `Switch to ${plan.name}`
+              : plan.cta;
 
           return (
             <View
@@ -310,34 +315,34 @@ export default function PricingScreen() {
               <TouchableOpacity
                 style={[
                   s.cta,
-                  plan.ctaStyle === 'filled'  && s.ctaFilled,
-                  plan.ctaStyle === 'outline' && s.ctaOutline,
-                  plan.ctaStyle === 'dark'    && s.ctaDark,
-                  isActive     && s.ctaDisabled,
-                  isDowngrade  && s.ctaDisabled,
+                  !isActive && plan.ctaStyle === 'filled'  && s.ctaFilled,
+                  !isActive && plan.ctaStyle === 'outline' && s.ctaOutline,
+                  !isActive && plan.ctaStyle === 'dark'    && s.ctaDark,
+                  isDowngrade && s.ctaDowngrade,
+                  isActive    && s.ctaDisabled,
                 ]}
-                activeOpacity={isActive || isDowngrade ? 1 : 0.85}
+                activeOpacity={isActive ? 1 : 0.85}
                 onPress={() => {
-                  if (isActive || isDowngrade || !firstGroup) return;
-                  if (isFree) return;
+                  if (isActive || !firstGroup) return;
                   setConfirmPlan(plan);
                 }}
               >
                 <Text style={[
                   s.ctaText,
-                  plan.ctaStyle === 'filled'  && s.ctaTextFilled,
-                  plan.ctaStyle === 'outline' && s.ctaTextOutline,
-                  plan.ctaStyle === 'dark'    && s.ctaTextDark,
-                  (isActive || isDowngrade)   && s.ctaTextDisabled,
+                  !isActive && plan.ctaStyle === 'filled'  && s.ctaTextFilled,
+                  !isActive && plan.ctaStyle === 'outline' && s.ctaTextOutline,
+                  !isActive && plan.ctaStyle === 'dark'    && s.ctaTextDark,
+                  isDowngrade && s.ctaTextDowngrade,
+                  isActive    && s.ctaTextDisabled,
                 ]}>
-                  {isActive ? 'Active' : isDowngrade ? 'Current plan is higher' : plan.cta}
+                  {ctaLabel}
                 </Text>
                 {!isActive && !isDowngrade && plan.ctaStyle === 'filled' && (
                   <Ionicons name="arrow-forward" size={16} color="#fff" style={{ marginLeft: 6 }} />
                 )}
               </TouchableOpacity>
 
-              {!isFree && !isActive && (
+              {!isFree && !isActive && !isDowngrade && (
                 <Text style={s.trialNote}>7-day free trial · Cancel anytime</Text>
               )}
             </View>
@@ -375,11 +380,17 @@ export default function PricingScreen() {
         <View style={s.modalOverlay}>
           <View style={s.modalCard}>
             <Text style={s.modalIcon}>{confirmPlan?.icon}</Text>
-            <Text style={s.modalTitle}>Upgrade to {confirmPlan?.name}?</Text>
-            {firstGroup && (
+            <Text style={s.modalTitle}>
+              {confirmPlan && PLAN_ID_MAP[confirmPlan.id] === 'free'
+                ? 'Switch to Free?'
+                : `Upgrade to ${confirmPlan?.name}?`}
+            </Text>
+            {firstGroup && confirmPlan && (
               <Text style={s.modalSub}>
-                This will upgrade <Text style={{ fontWeight: '700' }}>{(firstGroup as any).name}</Text> to the {confirmPlan?.name} plan.
-                {'\n'}Payment will be required once billing is enabled.
+                {PLAN_ID_MAP[confirmPlan.id] === 'free'
+                  ? `This will downgrade ${(firstGroup as any).name} to the FREE plan. You'll lose access to paid features.`
+                  : `This will upgrade ${(firstGroup as any).name} to the ${confirmPlan.name} plan.\nPayment will be required once billing is enabled.`
+                }
               </Text>
             )}
             <TouchableOpacity
@@ -552,9 +563,11 @@ const s = StyleSheet.create({
   },
   activeBadgeText: { fontSize: 11, fontWeight: '800', color: '#16A34A', letterSpacing: 0.5 },
 
-  // CTA disabled state
-  ctaDisabled:     { backgroundColor: '#F1F5F9', borderColor: '#E2E8F0' },
-  ctaTextDisabled: { color: '#94A3B8' },
+  // CTA disabled / downgrade states
+  ctaDisabled:      { backgroundColor: '#F1F5F9', borderColor: '#E2E8F0' },
+  ctaTextDisabled:  { color: '#94A3B8' },
+  ctaDowngrade:     { backgroundColor: 'transparent', borderWidth: 1.5, borderColor: '#E2E8F0' },
+  ctaTextDowngrade: { color: '#64748B' },
 
   // Best badge
   bestBadge: {
