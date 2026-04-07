@@ -5,11 +5,15 @@ import {
   ScrollView,
   StyleSheet,
   TouchableOpacity,
+  Modal,
+  ActivityIndicator,
   Platform,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { getCurrentUser, getUserGroups, upgradePlan } from '@/lib/data';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -98,9 +102,45 @@ const PLANS = [
 
 // ── Screen ────────────────────────────────────────────────────────────────────
 
+type PlanId = 'free' | 'pro' | 'squad_plus';
+
+const PLAN_ID_MAP: Record<string, PlanId> = {
+  free:  'free',
+  pro:   'pro',
+  squad: 'squad_plus',
+};
+
 export default function PricingScreen() {
-  const [billing, setBilling] = useState<Billing>('monthly');
-  const router = useRouter();
+  const [billing, setBilling]           = useState<Billing>('monthly');
+  const [confirmPlan, setConfirmPlan]   = useState<typeof PLANS[0] | null>(null);
+  const [successPlan, setSuccessPlan]   = useState<string | null>(null);
+  const router      = useRouter();
+  const queryClient = useQueryClient();
+
+  const { data: currentUser } = useQuery({
+    queryKey: ['currentUser'],
+    queryFn:  getCurrentUser,
+  });
+
+  const { data: userGroups } = useQuery({
+    queryKey: ['userGroups', currentUser?.id],
+    queryFn:  () => getUserGroups(currentUser!.id),
+    enabled:  !!currentUser?.id,
+  });
+
+  const firstGroup   = userGroups?.[0] ?? null;
+  const currentPlan: PlanId = (firstGroup as any)?.plan ?? 'free';
+
+  const upgradeMutation = useMutation({
+    mutationFn: ({ groupId, plan }: { groupId: string; plan: PlanId }) =>
+      upgradePlan(groupId, plan),
+    onSuccess: (_, { plan }) => {
+      queryClient.invalidateQueries({ queryKey: ['userGroups'] });
+      queryClient.invalidateQueries({ queryKey: ['group'] });
+      setConfirmPlan(null);
+      setSuccessPlan(plan);
+    },
+  });
 
   return (
     <SafeAreaView style={s.safe} edges={['top']}>
@@ -154,8 +194,14 @@ export default function PricingScreen() {
 
         {/* Plan cards */}
         {PLANS.map((plan) => {
-          const price = billing === 'monthly' ? plan.monthlyPrice : plan.yearlyPrice;
-          const isFree = plan.monthlyPrice === 0;
+          const price      = billing === 'monthly' ? plan.monthlyPrice : plan.yearlyPrice;
+          const isFree     = plan.monthlyPrice === 0;
+          const planId     = PLAN_ID_MAP[plan.id];
+          const isActive   = currentPlan === planId;
+          const isDowngrade = (
+            (currentPlan === 'squad_plus' && planId !== 'squad_plus') ||
+            (currentPlan === 'pro'        && planId === 'free')
+          );
 
           return (
             <View
@@ -163,10 +209,19 @@ export default function PricingScreen() {
               style={[
                 s.card,
                 plan.highlighted && s.cardHighlighted,
+                isActive && s.cardActive,
               ]}
             >
+              {/* Current plan badge */}
+              {isActive && (
+                <View style={s.activeBadge}>
+                  <Ionicons name="checkmark-circle" size={12} color="#16A34A" />
+                  <Text style={s.activeBadgeText}>Current Plan</Text>
+                </View>
+              )}
+
               {/* PRO badge */}
-              {plan.badge && (
+              {plan.badge && !isActive && (
                 <View style={s.bestBadge}>
                   <Text style={s.bestBadgeText}>{plan.badge}</Text>
                 </View>
@@ -255,26 +310,34 @@ export default function PricingScreen() {
               <TouchableOpacity
                 style={[
                   s.cta,
-                  plan.ctaStyle === 'filled' && s.ctaFilled,
+                  plan.ctaStyle === 'filled'  && s.ctaFilled,
                   plan.ctaStyle === 'outline' && s.ctaOutline,
-                  plan.ctaStyle === 'dark'   && s.ctaDark,
+                  plan.ctaStyle === 'dark'    && s.ctaDark,
+                  isActive     && s.ctaDisabled,
+                  isDowngrade  && s.ctaDisabled,
                 ]}
-                activeOpacity={0.85}
+                activeOpacity={isActive || isDowngrade ? 1 : 0.85}
+                onPress={() => {
+                  if (isActive || isDowngrade || !firstGroup) return;
+                  if (isFree) return;
+                  setConfirmPlan(plan);
+                }}
               >
                 <Text style={[
                   s.ctaText,
-                  plan.ctaStyle === 'filled' && s.ctaTextFilled,
+                  plan.ctaStyle === 'filled'  && s.ctaTextFilled,
                   plan.ctaStyle === 'outline' && s.ctaTextOutline,
-                  plan.ctaStyle === 'dark'   && s.ctaTextDark,
+                  plan.ctaStyle === 'dark'    && s.ctaTextDark,
+                  (isActive || isDowngrade)   && s.ctaTextDisabled,
                 ]}>
-                  {plan.cta}
+                  {isActive ? 'Active' : isDowngrade ? 'Current plan is higher' : plan.cta}
                 </Text>
-                {plan.ctaStyle === 'filled' && (
+                {!isActive && !isDowngrade && plan.ctaStyle === 'filled' && (
                   <Ionicons name="arrow-forward" size={16} color="#fff" style={{ marginLeft: 6 }} />
                 )}
               </TouchableOpacity>
 
-              {!isFree && (
+              {!isFree && !isActive && (
                 <Text style={s.trialNote}>7-day free trial · Cancel anytime</Text>
               )}
             </View>
@@ -306,6 +369,72 @@ export default function PricingScreen() {
 
         <View style={{ height: 32 }} />
       </ScrollView>
+
+      {/* ── Confirm upgrade modal ── */}
+      <Modal visible={!!confirmPlan} transparent animationType="fade">
+        <View style={s.modalOverlay}>
+          <View style={s.modalCard}>
+            <Text style={s.modalIcon}>{confirmPlan?.icon}</Text>
+            <Text style={s.modalTitle}>Upgrade to {confirmPlan?.name}?</Text>
+            {firstGroup && (
+              <Text style={s.modalSub}>
+                This will upgrade <Text style={{ fontWeight: '700' }}>{(firstGroup as any).name}</Text> to the {confirmPlan?.name} plan.
+                {'\n'}Payment will be required once billing is enabled.
+              </Text>
+            )}
+            <TouchableOpacity
+              style={s.modalConfirmBtn}
+              activeOpacity={0.88}
+              onPress={() => {
+                if (!confirmPlan || !firstGroup) return;
+                upgradeMutation.mutate({
+                  groupId: (firstGroup as any).id,
+                  plan:    PLAN_ID_MAP[confirmPlan.id],
+                });
+              }}
+            >
+              {upgradeMutation.isPending
+                ? <ActivityIndicator color="#fff" />
+                : <Text style={s.modalConfirmText}>Yes, upgrade</Text>
+              }
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={s.modalCancelBtn}
+              onPress={() => { setConfirmPlan(null); upgradeMutation.reset(); }}
+            >
+              <Text style={s.modalCancelText}>Cancel</Text>
+            </TouchableOpacity>
+            {upgradeMutation.isError && (
+              <Text style={s.modalError}>
+                {(upgradeMutation.error as any)?.message ?? 'Something went wrong'}
+              </Text>
+            )}
+          </View>
+        </View>
+      </Modal>
+
+      {/* ── Success modal ── */}
+      <Modal visible={!!successPlan} transparent animationType="fade">
+        <View style={s.modalOverlay}>
+          <View style={s.modalCard}>
+            <View style={s.successRing}>
+              <Ionicons name="checkmark" size={36} color="#fff" />
+            </View>
+            <Text style={s.modalTitle}>You're on {successPlan === 'pro' ? 'PRO' : 'SQUAD+'}!</Text>
+            <Text style={s.modalSub}>
+              Your squad has been upgraded.{'\n'}
+              Enjoy all the new features.
+            </Text>
+            <TouchableOpacity
+              style={s.modalConfirmBtn}
+              onPress={() => { setSuccessPlan(null); router.back(); }}
+            >
+              <Text style={s.modalConfirmText}>Go to Dashboard</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+
     </SafeAreaView>
   );
 }
@@ -407,6 +536,26 @@ const s = StyleSheet.create({
     elevation: 8,
   },
 
+  // Active plan card
+  cardActive: {
+    borderColor: '#16A34A',
+    borderWidth: 2,
+    backgroundColor: '#F0FDF4',
+  },
+  activeBadge: {
+    flexDirection: 'row', alignItems: 'center', gap: 5,
+    alignSelf: 'flex-start',
+    backgroundColor: '#DCFCE7',
+    borderRadius: 50,
+    paddingHorizontal: 12, paddingVertical: 4,
+    marginBottom: 14,
+  },
+  activeBadgeText: { fontSize: 11, fontWeight: '800', color: '#16A34A', letterSpacing: 0.5 },
+
+  // CTA disabled state
+  ctaDisabled:     { backgroundColor: '#F1F5F9', borderColor: '#E2E8F0' },
+  ctaTextDisabled: { color: '#94A3B8' },
+
   // Best badge
   bestBadge: {
     alignSelf: 'flex-start',
@@ -505,6 +654,34 @@ const s = StyleSheet.create({
   },
   trustItem: { alignItems: 'center', gap: 6 },
   trustText: { fontSize: 11, fontWeight: '600', color: NAVY, textAlign: 'center' },
+
+  // Modals
+  modalOverlay: {
+    flex: 1, backgroundColor: 'rgba(0,0,0,0.5)',
+    justifyContent: 'center', alignItems: 'center', padding: 24,
+  },
+  modalCard: {
+    backgroundColor: WHITE, borderRadius: 24,
+    padding: 28, width: '100%', alignItems: 'center',
+    shadowColor: '#000', shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.15, shadowRadius: 24, elevation: 12,
+  },
+  modalIcon:  { fontSize: 44, marginBottom: 12 },
+  modalTitle: { fontSize: 20, fontWeight: '800', color: NAVY, textAlign: 'center', marginBottom: 10 },
+  modalSub:   { fontSize: 14, color: GREY_TEXT, textAlign: 'center', lineHeight: 20, marginBottom: 24 },
+  modalConfirmBtn: {
+    width: '100%', backgroundColor: GREEN_DARK,
+    borderRadius: 14, paddingVertical: 15, alignItems: 'center', marginBottom: 10,
+  },
+  modalConfirmText: { fontSize: 15, fontWeight: '700', color: WHITE },
+  modalCancelBtn:   { paddingVertical: 10 },
+  modalCancelText:  { fontSize: 14, color: GREY_TEXT },
+  modalError:       { fontSize: 13, color: '#EF4444', marginTop: 8, textAlign: 'center' },
+  successRing: {
+    width: 80, height: 80, borderRadius: 40,
+    backgroundColor: GREEN_DARK,
+    justifyContent: 'center', alignItems: 'center', marginBottom: 16,
+  },
 
   // FAQ
   faqCard: {

@@ -134,6 +134,14 @@ export async function getGroup(groupId?: string) {
   return data ?? null;
 }
 
+export async function upgradePlan(groupId: string, plan: 'free' | 'pro' | 'squad_plus') {
+  const { error } = await supabase
+    .from('groups')
+    .update({ plan, plan_activated_at: new Date().toISOString() })
+    .eq('id', groupId);
+  if (error) throw error;
+}
+
 export async function getUserGroups(playerId: string) {
   // Groups via group_members rows
   const { data: memberships } = await supabase
