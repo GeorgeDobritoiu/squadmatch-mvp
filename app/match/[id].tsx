@@ -37,6 +37,9 @@ import {
 } from '@/lib/data';
 import AddGuestModal from '@/components/AddGuestModal';
 import RatingBadge from '@/components/RatingBadge';
+import UpgradeBanner from '@/components/UpgradeBanner';
+import { FEATURES, Plan } from '@/lib/plan';
+import { getGroup } from '@/lib/data';
 
 export default function MatchDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -94,6 +97,12 @@ export default function MatchDetailScreen() {
     queryFn: () => getPayments(id),
     enabled: !!id,
   });
+
+  const { data: group } = useQuery({
+    queryKey: ['group'],
+    queryFn: () => getGroup(),
+  });
+  const plan = (group as any)?.plan as Plan | undefined;
 
   const generateMutation = useMutation({
     mutationFn: () => generateTeams(id),
@@ -463,14 +472,24 @@ export default function MatchDetailScreen() {
         {/* Post-Match actions */}
         {match.status === 'closed' && (
           <View style={styles.section}>
-            <TouchableOpacity style={styles.rateBtn} onPress={() => router.push(`/rate/${match.id}`)}>
-              <Ionicons name="star-outline" size={18} color="#7C3AED" />
-              <Text style={styles.rateBtnText}>Rate Players</Text>
-            </TouchableOpacity>
-            <TouchableOpacity style={[styles.motmBtn, { marginTop: spacing.sm }]} onPress={() => router.push(`/motm/${match.id}`)}>
-              <Ionicons name="trophy-outline" size={18} color="#D97706" />
-              <Text style={styles.motmBtnText}>MOTM Voting</Text>
-            </TouchableOpacity>
+            {FEATURES.playerRatings(plan)
+              ? (
+                <TouchableOpacity style={styles.rateBtn} onPress={() => router.push(`/rate/${match.id}`)}>
+                  <Ionicons name="star-outline" size={18} color="#7C3AED" />
+                  <Text style={styles.rateBtnText}>Rate Players</Text>
+                </TouchableOpacity>
+              )
+              : <UpgradeBanner feature="Player Ratings" compact />
+            }
+            {FEATURES.motmVoting(plan)
+              ? (
+                <TouchableOpacity style={[styles.motmBtn, { marginTop: spacing.sm }]} onPress={() => router.push(`/motm/${match.id}`)}>
+                  <Ionicons name="trophy-outline" size={18} color="#D97706" />
+                  <Text style={styles.motmBtnText}>MOTM Voting</Text>
+                </TouchableOpacity>
+              )
+              : <UpgradeBanner feature="MOTM Voting" compact />
+            }
             {isAdmin && (
               <TouchableOpacity style={[styles.submitScoreBtn, { marginTop: spacing.sm }]} onPress={() => setScoreModalVisible(true)}>
                 <Ionicons name="create-outline" size={18} color={colors.white} />
@@ -498,10 +517,15 @@ export default function MatchDetailScreen() {
               <Ionicons name="checkmark-done-outline" size={18} color={colors.white} />
               <Text style={styles.submitScoreBtnText}>Submit Final Score</Text>
             </TouchableOpacity>
-            <TouchableOpacity style={[styles.motmBtn, { marginTop: spacing.sm }]} onPress={() => router.push(`/motm/${match.id}`)}>
-              <Ionicons name="trophy-outline" size={18} color="#D97706" />
-              <Text style={styles.motmBtnText}>MOTM Voting</Text>
-            </TouchableOpacity>
+            {FEATURES.motmVoting(plan)
+              ? (
+                <TouchableOpacity style={[styles.motmBtn, { marginTop: spacing.sm }]} onPress={() => router.push(`/motm/${match.id}`)}>
+                  <Ionicons name="trophy-outline" size={18} color="#D97706" />
+                  <Text style={styles.motmBtnText}>MOTM Voting</Text>
+                </TouchableOpacity>
+              )
+              : <UpgradeBanner feature="MOTM Voting" compact />
+            }
           </View>
         )}
 
@@ -577,8 +601,8 @@ export default function MatchDetailScreen() {
                         </Text>
                       </TouchableOpacity>
 
-                      {/* Reminder button — only for unpaid */}
-                      {!isPaid && (
+                      {/* Reminder button — only for unpaid, PRO+ only */}
+                      {!isPaid && FEATURES.paymentReminders(plan) && (
                         <TouchableOpacity
                           style={[styles.reminderBtn, payment.reminder_sent && styles.reminderBtnSent]}
                           onPress={() => {

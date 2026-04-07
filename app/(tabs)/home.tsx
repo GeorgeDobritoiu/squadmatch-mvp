@@ -42,6 +42,7 @@ import {
   markPayment,
 } from '@/lib/data';
 import AddGuestModal from '@/components/AddGuestModal';
+import { FEATURES, Plan } from '@/lib/plan';
 
 // ── Tokens ────────────────────────────────────────────────────────────────────
 
@@ -175,7 +176,8 @@ export default function HomeScreen() {
   // ── Derived ───────────────────────────────────────────────────────────────
 
   const isAdmin     = currentUser?.role === 'admin';
-  const isPremium   = false; // wire to subscription when ready
+  const plan        = (group as any)?.plan as Plan | undefined;
+  const isPremium   = FEATURES.matchStats(plan);
   const myAttendance = attendance?.find((a) => a.player_id === currentUser?.id);
   const myPayment    = payments?.find((p) => p.player_id === currentUser?.id);
   const goingList    = (attendance ?? []).filter((a) => a.status === 'yes');
@@ -533,10 +535,10 @@ export default function HomeScreen() {
             <Text style={s.adminSectionLabel}>Admin</Text>
             <View style={s.adminGrid}>
               {[
-                { icon: 'add-circle-outline' as const, label: 'Create Match', color: GREEN,  bg: GREEN_TINT,  border: GREEN_BDR,  onPress: () => router.push('/schedule')          },
-                { icon: 'people-outline'      as const, label: 'Players',      color: NAVY,   bg: GREY_LIGHT,  border: GREY_BORDER, onPress: () => router.push('/(tabs)/group')      },
-                { icon: 'shuffle-outline'     as const, label: 'Teams',        color: PURPLE, bg: PURPLE_TINT, border: '#DDD6FE',  onPress: () => match && router.push(`/teams/${match.id}`) },
-                { icon: 'stats-chart-outline' as const, label: 'Stats',        color: AMBER,  bg: AMBER_TINT,  border: AMBER_BDR,  onPress: () => router.push('/history')           },
+                { icon: 'add-circle-outline' as const, label: 'Create Match', color: GREEN,  bg: GREEN_TINT,  border: GREEN_BDR,   onPress: () => router.push('/schedule'),                              locked: false },
+                { icon: 'people-outline'      as const, label: 'Players',      color: NAVY,   bg: GREY_LIGHT,  border: GREY_BORDER,  onPress: () => router.push('/(tabs)/group'),                            locked: false },
+                { icon: 'shuffle-outline'     as const, label: 'Teams',        color: PURPLE, bg: PURPLE_TINT, border: '#DDD6FE',   onPress: () => match && router.push(`/teams/${match.id}`),              locked: false },
+                { icon: 'stats-chart-outline' as const, label: 'Stats',        color: AMBER,  bg: AMBER_TINT,  border: AMBER_BDR,   onPress: () => isPremium ? router.push('/history') : router.push('/pricing'), locked: !isPremium },
               ].map((item) => (
                 <TouchableOpacity
                   key={item.label}
@@ -548,6 +550,9 @@ export default function HomeScreen() {
                     <Ionicons name={item.icon} size={22} color={item.color} />
                   </View>
                   <Text style={[s.adminBtnLabel, { color: item.color }]}>{item.label}</Text>
+                  {item.locked && (
+                    <Ionicons name="lock-closed" size={11} color={AMBER} style={{ position: 'absolute', top: 6, right: 6 }} />
+                  )}
                 </TouchableOpacity>
               ))}
             </View>
@@ -573,16 +578,16 @@ export default function HomeScreen() {
         {/* ── QUICK ACTIONS ── */}
         <View style={s.quickRow}>
           {[
-            { icon: 'football-outline'  as const, label: 'Match',   onPress: () => match && router.push(`/match/${match.id}`), color: NAVY   },
-            { icon: 'people-outline'    as const, label: 'Squad',   onPress: () => router.push('/(tabs)/group'),               color: NAVY   },
-            { icon: 'time-outline'      as const, label: 'History', onPress: () => router.push('/history'),                    color: NAVY   },
-            { icon: 'star-outline'      as const, label: 'Rate',    onPress: () => match && router.push(`/rate/${match.id}`),  color: AMBER  },
+            { icon: 'football-outline'  as const, label: 'Match',   onPress: () => match && router.push(`/match/${match.id}`),                              color: NAVY,  locked: false },
+            { icon: 'people-outline'    as const, label: 'Squad',   onPress: () => router.push('/(tabs)/group'),                                               color: NAVY,  locked: false },
+            { icon: 'time-outline'      as const, label: 'History', onPress: () => isPremium ? router.push('/history') : router.push('/pricing'),              color: NAVY,  locked: !isPremium },
+            { icon: 'star-outline'      as const, label: 'Rate',    onPress: () => isPremium && match ? router.push(`/rate/${match.id}`) : router.push('/pricing'), color: AMBER, locked: !isPremium },
           ].map((q) => (
             <TouchableOpacity key={q.label} style={s.quickBtn} onPress={q.onPress} activeOpacity={0.75}>
-              <View style={s.quickIcon}>
-                <Ionicons name={q.icon} size={20} color={q.color} />
+              <View style={[s.quickIcon, q.locked && { backgroundColor: '#F1F5F9' }]}>
+                <Ionicons name={q.locked ? 'lock-closed' : q.icon} size={20} color={q.locked ? '#94A3B8' : q.color} />
               </View>
-              <Text style={s.quickLabel}>{q.label}</Text>
+              <Text style={[s.quickLabel, q.locked && { color: '#94A3B8' }]}>{q.label}</Text>
             </TouchableOpacity>
           ))}
         </View>

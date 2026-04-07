@@ -35,6 +35,8 @@ import {
 } from '@/lib/data';
 import { getRatingColor, multiSnakeDraft, computeRating } from '@/lib/ratings';
 import RatingBadge from '@/components/RatingBadge';
+import UpgradeBanner from '@/components/UpgradeBanner';
+import { FEATURES, Plan } from '@/lib/plan';
 import { useRouter } from 'expo-router';
 
 // ── Constants ─────────────────────────────────────────────────────────────────
@@ -166,7 +168,8 @@ export default function GroupScreen() {
   const isOwner    = myRole === 'owner';
   const isAdmin    = myRole === 'admin' || myRole === 'owner';
 
-  const isPaidPlan = group?.subscription_plan === 'pro' || group?.subscription_plan === 'squad_plus';
+  const plan       = (group as any)?.plan as Plan | undefined;
+  const isPaidPlan = FEATURES.balancedTeams(plan);
   const isFreeTier = !isPaidPlan;
 
   const handlePickLogo = async () => {
@@ -528,20 +531,40 @@ export default function GroupScreen() {
                 <Text style={[styles.adminBtnText, styles.adminBtnTextOutline]}>Calendar</Text>
               </TouchableOpacity>
             </View>
-            <TouchableOpacity
-              style={styles.createTeamsBtn}
-              onPress={() => { resetTeams(); setTeamsModal(true); }}
-              activeOpacity={0.88}
-            >
-              <View style={styles.createTeamsBtnIcon}>
-                <Ionicons name="people" size={20} color={colors.white} />
-              </View>
-              <View style={{ flex: 1 }}>
-                <Text style={styles.createTeamsBtnTitle}>Create Teams</Text>
-                <Text style={styles.createTeamsBtnSub}>Split squad into balanced teams</Text>
-              </View>
-              <Ionicons name="chevron-forward" size={18} color={colors.white} />
-            </TouchableOpacity>
+            {isPaidPlan ? (
+              <TouchableOpacity
+                style={styles.createTeamsBtn}
+                onPress={() => { resetTeams(); setTeamsModal(true); }}
+                activeOpacity={0.88}
+              >
+                <View style={styles.createTeamsBtnIcon}>
+                  <Ionicons name="people" size={20} color={colors.white} />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.createTeamsBtnTitle}>Create Teams</Text>
+                  <Text style={styles.createTeamsBtnSub}>Split squad into balanced teams</Text>
+                </View>
+                <Ionicons name="chevron-forward" size={18} color={colors.white} />
+              </TouchableOpacity>
+            ) : (
+              <>
+                <TouchableOpacity
+                  style={styles.createTeamsBtn}
+                  onPress={() => { resetTeams(); setTeamsModal(true); }}
+                  activeOpacity={0.88}
+                >
+                  <View style={styles.createTeamsBtnIcon}>
+                    <Ionicons name="shuffle" size={20} color={colors.white} />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.createTeamsBtnTitle}>Random Teams</Text>
+                    <Text style={styles.createTeamsBtnSub}>Split squad randomly</Text>
+                  </View>
+                  <Ionicons name="chevron-forward" size={18} color={colors.white} />
+                </TouchableOpacity>
+                <UpgradeBanner feature="Balanced Teams (by rating)" compact />
+              </>
+            )}
 
             <TouchableOpacity
               style={styles.inviteBtn}
@@ -573,7 +596,12 @@ export default function GroupScreen() {
         )}
 
         {/* ── Squad Ratings ─────────────────────────────────────────────── */}
-        {ratings && (displayMembers.length) > 0 && (
+        {!isPaidPlan && (
+          <View style={styles.section}>
+            <UpgradeBanner feature="Squad Ratings & Leaderboard" />
+          </View>
+        )}
+        {isPaidPlan && ratings && (displayMembers.length) > 0 && (
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>Squad Ratings</Text>
             <View style={styles.ratingsCard}>
